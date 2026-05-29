@@ -1,4 +1,4 @@
-dataset_path: TIGER-Lab/MMLU-Pro
+dataset_path: /root/.cache/huggingface/datasets/TIGER-Lab___mmlu-pro/default/0.0.0/54611cde22c74cca43dd78732198de6abe971398
 test_split: test
 fewshot_split: validation
 fewshot_config:

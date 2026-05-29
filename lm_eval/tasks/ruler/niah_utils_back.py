@@ -20,20 +20,6 @@ def download_dataset(df: Generator) -> dict[str, datasets.Dataset]:
     }
 
 
-def _filter_tokenizer_kwargs(kwargs: dict) -> dict:
-    filtered = {}
-    tokenizer_keys = {"tokenizer", "pretrained", "tokenizer_backend"}
-    for k, v in kwargs.items():
-        if k in tokenizer_keys:
-            filtered[k] = v
-    if "tokenizer" not in filtered and "pretrained" not in filtered:
-        if "model" in kwargs:
-            filtered["tokenizer"] = kwargs["model"]
-        elif "base_url" in kwargs:
-            filtered["base_url"] = kwargs["base_url"]
-    return filtered
-
-
 def niah_single_1(**kwargs):
     seq_lengths = kwargs.pop("max_seq_lengths", DEFAULT_SEQ_LENGTHS)
     return download_dataset(
@@ -45,7 +31,7 @@ def niah_single_1(**kwargs):
             type_needle_k="words",
             type_needle_v="numbers",
             num_samples=500,
-            TOKENIZER=get_tokenizer(**_filter_tokenizer_kwargs(kwargs)),
+            TOKENIZER=get_tokenizer(**kwargs),
         )
         for seq in seq_lengths
     )
@@ -62,7 +48,7 @@ def niah_single_2(**kwargs):
             type_needle_k="words",
             type_needle_v="numbers",
             num_samples=500,
-            TOKENIZER=get_tokenizer(**_filter_tokenizer_kwargs(kwargs)),
+            TOKENIZER=get_tokenizer(**kwargs),
         )
         for seq in seq_lengths
     )
@@ -79,7 +65,7 @@ def niah_single_3(**kwargs):
             type_needle_k="words",
             type_needle_v="uuids",
             num_samples=500,
-            TOKENIZER=get_tokenizer(**_filter_tokenizer_kwargs(kwargs)),
+            TOKENIZER=get_tokenizer(**kwargs),
         )
         for seq in seq_lengths
     )
@@ -97,7 +83,7 @@ def niah_multikey_1(**kwargs):
             type_needle_v="numbers",
             num_needle_k=4,
             num_samples=500,
-            TOKENIZER=get_tokenizer(**_filter_tokenizer_kwargs(kwargs)),
+            TOKENIZER=get_tokenizer(**kwargs),
         )
         for seq in seq_lengths
     )
@@ -114,7 +100,7 @@ def niah_multikey_2(**kwargs):
             type_needle_k="words",
             type_needle_v="numbers",
             num_samples=500,
-            TOKENIZER=get_tokenizer(**_filter_tokenizer_kwargs(kwargs)),
+            TOKENIZER=get_tokenizer(**kwargs),
         )
         for seq in seq_lengths
     )
@@ -131,7 +117,7 @@ def niah_multikey_3(**kwargs):
             type_needle_k="uuids",
             type_needle_v="uuids",
             num_samples=500,
-            TOKENIZER=get_tokenizer(**_filter_tokenizer_kwargs(kwargs)),
+            TOKENIZER=get_tokenizer(**kwargs),
         )
         for seq in seq_lengths
     )
@@ -149,7 +135,7 @@ def niah_multivalue(**kwargs):
             type_needle_v="numbers",
             num_needle_v=4,
             num_samples=500,
-            TOKENIZER=get_tokenizer(**_filter_tokenizer_kwargs(kwargs)),
+            TOKENIZER=get_tokenizer(**kwargs),
         )
         for seq in seq_lengths
     )
@@ -167,7 +153,7 @@ def niah_multiquery(**kwargs):
             type_needle_v="numbers",
             num_needle_q=4,
             num_samples=500,
-            TOKENIZER=get_tokenizer(**_filter_tokenizer_kwargs(kwargs)),
+            TOKENIZER=get_tokenizer(**kwargs),
         )
         for seq in seq_lengths
     )

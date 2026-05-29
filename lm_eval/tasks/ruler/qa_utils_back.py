@@ -14,7 +14,6 @@
 
 
 import itertools  # noqa: I001
-import json
 import random
 from functools import cache
 
@@ -36,11 +35,6 @@ DOCUMENT_PROMPT = "Document {i}:\n{document}"
 
 @cache
 def download_json(url) -> dict:
-    import os
-    if url.startswith("file://") or os.path.exists(url):
-        path = url.replace("file://", "")
-        with open(path) as f:
-            return json.load(f)
     response = requests.get(url)
     response.raise_for_status()
     data = response.json()
@@ -49,7 +43,7 @@ def download_json(url) -> dict:
 
 @cache
 def read_squad(
-    url="/root/.cache/huggingface/datasets/dev-v2.0.json",
+    url="https://rajpurkar.github.io/SQuAD-explorer/dataset/dev-v2.0.json",
 ) -> tuple[list[dict], list[str]]:
     data = download_json(url)
     total_docs = [p["context"] for d in data["data"] for p in d["paragraphs"]]
@@ -80,7 +74,7 @@ def read_squad(
 
 @cache
 def read_hotpotqa(
-    url="/root/.cache/huggingface/datasets/hotpot_dev_distractor_v1.json",
+    url="http://curtis.ml.cmu.edu/datasets/hotpot/hotpot_dev_distractor_v1.json",
 ) -> tuple[list[dict], list[str]]:
     data = download_json(url)
     total_docs = [f"{t}\n{''.join(p)}" for d in data for t, p in d["context"]]
