@@ -72,10 +72,10 @@ python3 run_eval.py \
     --api-key ${API_KEY} \
     --tasks ${params.TASKS} \
     --limit "${params.LIMIT}" \
-    --ruler-limit "${params.RULER_LIMIT}" 2>&1 | tee output/${params.TESTER}/${BUILD_NUMBER}/${params.CHIP}/${params.MODEL}/lm_eval_results.log
+    --ruler-limit "${params.RULER_LIMIT}"
 echo "=== 测试脚本执行结束 ==="
 echo "=== 输出目录 ==="
-find output/${params.TESTER}/${BUILD_NUMBER}/${params.CHIP}/${params.MODEL}/ -type d
+find output/${params.TESTER}/${BUILD_NUMBER}/${params.CHIP}/${params.MODEL}/ -type f
 ENDSSH
 """
                             }
@@ -112,58 +112,64 @@ find ${localDir}/ -type f
             steps {
                 catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
                     script {
-                        def logContent = ""
+                        def tasksUnderscore = params.TASKS.replace(',', '-')
+                        def logFileBase = "reports/${params.TESTER}/${BUILD_NUMBER}/${params.CHIP}/${params.MODEL}"
+                        def logFilePattern = "${logFileBase}/lm-eval-*.log"
                         def logFile = ""
-                        if (env.RESULT_DIR) {
-                            def logFile1 = "reports/${params.TESTER}/${BUILD_NUMBER}/${params.CHIP}/${params.MODEL}/lm_eval_results.log"
-                            def logFile2 = "reports/${params.TESTER}/${BUILD_NUMBER}/${params.CHIP}/${params.MODEL}/test.log"
-                            logFile = fileExists(logFile1) ? logFile1 : (fileExists(logFile2) ? logFile2 : "")
-                            logContent = logFile ? readFile(logFile) : ""
-                        }
+                        def logContent = ""
                         
-                        def taskResults = []
-                        def taskDirs = []
-                        def lines = logContent.split('\n')
-                        for (int i = 0; i < lines.size(); i++) {
-                            def line = lines[i]
-                            if (line.contains('Running') && line.contains('with run_task')) {
-                                def taskMatch = line =~ /Running (\S+) with run_task_(\S+)/
-                                if (taskMatch.find()) {
-                                    taskDirs.add([name: taskMatch.group(1), runner: taskMatch.group(2)])
-                                }
-                            }
-                        }
-                        
-                        def htmlRows = ""
-                        if (taskDirs.isEmpty()) {
-                            htmlRows = "<tr><td colspan='2'>无任务执行信息</td></tr>"
+                        def files = findFiles(glob: logFilePattern)
+                        if (files.length > 0) {
+                            logFile = files[0].path
+                            logContent = readFile(logFile)
                         } else {
-                            taskDirs.each { task ->
-                                htmlRows += """
-                                <tr>
-                                    <td>${task.name}</td>
-                                    <td>使用 ${task.runner} 执行</td>
-                                </tr>
-                                """
+                            def logFileAlt = "${logFileBase}/test.log"
+                            if (fileExists(logFileAlt)) {
+                                logContent = readFile(logFileAlt)
+                                logFile = logFileAlt
                             }
                         }
                         
                         def hasResult = logContent.length() > 0
                         def resultStatus = hasResult ? "完成" : "失败/无结果"
                         
+                        def mmluProTable = extractLmEvalTable(logContent, "mmlu_pro")
+                        def gsmPlusTable = extractLmEvalTable(logContent, "gsm_plus")
+                        def rulerTable = extractLmEvalTable(logContent, "ruler")
+                        
+                        def mmluProScore = extractMainScore(logContent, "mmlu_pro")
+                        def gsmPlusScore = extractMainScore(logContent, "gsm_plus")
+                        def rulerScore = extractMainScore(logContent, "ruler")
+                        
+                        def taskSummaryRows = ""
+                        if (params.TASKS.contains("mmlu_pro")) {
+                            taskSummaryRows += "<tr><td>mmlu_pro</td><td>${mmluProScore}</td></tr>"
+                        }
+                        if (params.TASKS.contains("gsm_plus")) {
+                            taskSummaryRows += "<tr><td>gsm_plus</td><td>${gsmPlusScore}</td></tr>"
+                        }
+                        if (params.TASKS.contains("ruler")) {
+                            taskSummaryRows += "<tr><td>ruler</td><td>${rulerScore}</td></tr>"
+                        }
+                        if (taskSummaryRows.isEmpty()) {
+                            taskSummaryRows = "<tr><td colspan='2'>无任务执行</td></tr>"
+                        }
+                        
                         def emailBody = """
 <html>
 <head>
     <style>
         body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f5f5f5; }
-        .container { max-width: 900px; margin: 0 auto; background-color: #fff; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .container { max-width: 1200px; margin: 0 auto; background-color: #fff; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
         .header { background-color: ${hasResult ? '#4CAF50' : '#f44336'}; color: white; padding: 20px; border-radius: 5px 5px 0 0; }
         .content { padding: 20px; }
-        table { border-collapse: collapse; width: 100%; margin-top: 15px; }
-        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+        table { border-collapse: collapse; width: 100%; margin-top: 15px; font-size: 13px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
         th { background-color: #f2f2f2; }
         .footer { margin-top: 20px; padding: 15px; background-color: #f9f9f9; border-radius: 0 0 5px 5px; color: #666; font-size: 12px; }
-        pre { background-color: #f4f4f4; padding: 10px; overflow-x: auto; border-radius: 3px; }
+        pre { background-color: #f4f4f4; padding: 10px; overflow-x: auto; border-radius: 3px; font-size: 12px; }
+        .section-title { background-color: #e3f2fd; padding: 10px; margin-top: 20px; border-radius: 3px; font-weight: bold; }
+        .score-highlight { background-color: #c8e6c9; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -188,12 +194,41 @@ find ${localDir}/ -type f
                 <tr><th>构建状态</th><td>${currentBuild.currentResult}</td></tr>
             </table>
             
-            <h3>执行任务</h3>
+            <h3>任务汇总得分</h3>
             <table>
-                <tr style="background-color: #e3f2fd;"><th>任务名称</th><th>执行方式</th></tr>
-                ${htmlRows}
+                <tr style="background-color: #e3f2fd;"><th>任务名称</th><th>得分</th></tr>
+                ${taskSummaryRows}
             </table>
-            
+"""
+                        
+                        if (params.TASKS.contains("mmlu_pro") && mmluProTable) {
+                            emailBody += """
+            <div class="section-title">MMLU_PRO 任务测试结果</div>
+            <table>
+                ${mmluProTable}
+            </table>
+"""
+                        }
+                        
+                        if (params.TASKS.contains("gsm_plus") && gsmPlusTable) {
+                            emailBody += """
+            <div class="section-title">GSM_PLUS 任务测试结果</div>
+            <table>
+                ${gsmPlusTable}
+            </table>
+"""
+                        }
+                        
+                        if (params.TASKS.contains("ruler") && rulerTable) {
+                            emailBody += """
+            <div class="section-title">RULER 任务测试结果</div>
+            <table>
+                ${rulerTable}
+            </table>
+"""
+                        }
+                        
+                        emailBody += """
             <h3>输出目录</h3>
             <p>${env.RESULT_DIR ?: 'N/A'}</p>
             
@@ -206,16 +241,21 @@ find ${localDir}/ -type f
     </div>
 </body>
 </html>"""
+                        
                         echo "=== lm-evaluation-harness 测试结果 ==="
                         echo "Build Number: ${BUILD_NUMBER}"
                         echo "结果目录: ${env.RESULT_DIR ?: 'N/A'}"
                         echo "测试状态: ${resultStatus}"
-                        echo "任务列表: ${taskDirs}"
+                        echo "mmlu_pro 得分: ${mmluProScore}"
+                        echo "gsm_plus 得分: ${gsmPlusScore}"
+                        echo "ruler 得分: ${rulerScore}"
+                        
                         emailext(
                             subject: "[模型推理 - lm-evaluation测试报告] #${BUILD_NUMBER} ${params.CHIP} - ${params.MODEL}",
                             body: emailBody,
                             to: "${params.RECIPIENTS}",
-                            mimeType: 'text/html'
+                            mimeType: 'text/html',
+                            attachmentsPattern: logFilePattern
                         )
                     }
                 }
@@ -225,7 +265,8 @@ find ${localDir}/ -type f
     post {
         always {
             script {
-                archiveArtifacts artifacts: "reports/${params.TESTER}/${env.BUILD_NUMBER}/**", allowEmptyArchive: true, fingerprint: true
+                def logFilePattern = "reports/${params.TESTER}/${BUILD_NUMBER}/${params.CHIP}/${params.MODEL}/*"
+                archiveArtifacts artifacts: logFilePattern, allowEmptyArchive: true, fingerprint: true
                 echo "构建完成: ${currentBuild.currentResult}"
             }
         }
@@ -233,4 +274,79 @@ find ${localDir}/ -type f
             cleanWs()
         }
     }
+}
+
+def extractLmEvalTable(String content, String taskName) {
+    def lines = content.split('\n')
+    def inTable = false
+    def tableLines = []
+    def headerFound = false
+    
+    for (int i = 0; i < lines.size(); i++) {
+        def line = lines[i]
+        
+        if (line.contains("Running Task: ${taskName}") || (taskName == "mmlu_pro" && line.contains("|mmlu_pro"))) {
+            inTable = true
+            headerFound = false
+        }
+        
+        if (inTable && line =~ /\|.*\|.*\|/) {
+            def trimmed = line.trim()
+            if (trimmed && trimmed.startsWith("|")) {
+                if (trimmed.contains("Tasks") || trimmed.contains("Groups") || trimmed.contains("Version") || trimmed.contains("-") || trimmed.contains("mmlu_pro") || trimmed.contains("gsm_plus") || trimmed.contains("ruler") || trimmed.contains("niah") || trimmed.contains("ruler_")) {
+                    tableLines.add(trimmed)
+                    headerFound = true
+                }
+            }
+        } else if (inTable && headerFound && line.trim() && !line.trim().startsWith("|") && !line.contains("Running")) {
+            inTable = false
+        }
+    }
+    
+    if (tableLines.isEmpty()) {
+        return ""
+    }
+    
+    def html = "<tr><th>任务</th><th>Version</th><th>Filter</th><th>n-shot</th><th>Metric</th><th>Value</th><th>Stderr</th></tr>"
+    
+    tableLines.each { line ->
+        def cells = line.split("\\|").collect { it.trim() }.findAll { it }
+        if (cells.size() >= 5) {
+            def taskName = cells[0]
+            def version = cells.size() > 1 ? cells[1] : ""
+            def filter = cells.size() > 2 ? cells[2] : ""
+            def nshot = cells.size() > 3 ? cells[3] : ""
+            def metric = cells.size() > 4 ? cells[4] : ""
+            def value = cells.size() > 5 ? cells[5] : ""
+            def stderr = cells.size() > 6 ? cells[6] : ""
+            
+            def rowClass = ""
+            if (taskName.contains("-")) {
+                rowClass = "style=\"background-color: #f9f9f9;\""
+            } else if (taskName == "mmlu_pro" || taskName == "gsm_plus" || taskName == "ruler" || taskName == "Groups" || taskName == "mmlu_pro") {
+                rowClass = "class=\"score-highlight\""
+            }
+            
+            html += "<tr ${rowClass}><td>${taskName}</td><td>${version}</td><td>${filter}</td><td>${nshot}</td><td>${metric}</td><td>${value}</td><td>${stderr}</td></tr>"
+        }
+    }
+    
+    return html
+}
+
+def extractMainScore(String content, String taskName) {
+    def pattern = ""
+    if (taskName == "mmlu_pro") {
+        pattern = /\|mmlu_pro\s+\|\s*(\d+)\|.*?\|(\d+\.\d+)\|/
+    } else if (taskName == "gsm_plus") {
+        pattern = /\|gsm_plus\s+\|\s*(\d+)\|.*?\|(\d+\.\d+)\|/
+    } else if (taskName == "ruler") {
+        pattern = /\|Groups\|.*?\|(\d+\.\d+)\|/
+    }
+    
+    def matcher = content =~ pattern
+    if (matcher.find()) {
+        return matcher.group(2)
+    }
+    return "N/A"
 }

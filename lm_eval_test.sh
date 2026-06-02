@@ -84,6 +84,24 @@ if [ -z "$TASKS" ]; then
     usage
 fi
 
+# 生成日志文件路径
+TASKS_UNDERSCORE=$(echo "$TASKS" | tr ',' '-')
+LOG_FILE="${OUTPUT_BASE}/lm-eval-${TASKS_UNDERSCORE}.log"
+mkdir -p ${OUTPUT_BASE}
+
+# 记录开始时间
+echo "========================================" | tee "$LOG_FILE"
+echo "lm-evaluation-harness Test Start" | tee -a "$LOG_FILE"
+echo "Time: $(date '+%Y-%m-%d %H:%M:%S')" | tee -a "$LOG_FILE"
+echo "========================================" | tee -a "$LOG_FILE"
+echo "Config:" | tee -a "$LOG_FILE"
+echo "  LLM_ADDR: $LLM_ADDR" | tee -a "$LOG_FILE"
+echo "  MODEL_NAME: $MODEL_NAME" | tee -a "$LOG_FILE"
+echo "  TASKS: $TASKS" | tee -a "$LOG_FILE"
+echo "  LIMIT: ${LIMIT:-<unlimited>}" | tee -a "$LOG_FILE"
+echo "  RULER_LIMIT: $RULER_LIMIT" | tee -a "$LOG_FILE"
+echo "========================================" | tee -a "$LOG_FILE"
+
 # model_args 构造
 MODEL_ARGS_BASE_1="{\"model\":\"$MODEL_NAME\",\"base_url\":\"$LLM_ADDR/v1/completions\",\"max_length\":131072,\"tokenizer\":\"$LOCAL_MODEL_PATH\",\"trust_remote_code\":true,\"num_concurrent\":10,\"max_retries\":3,\"timeout\":12000,\"tokenized_requests\":false,\"headers\":{\"Authorization\":\"Bearer $API_KEY\"}}"
 MODEL_ARGS_BASE_2="{\"model\":\"$MODEL_NAME\",\"base_url\":\"$LLM_ADDR/v1/completions\",\"max_length\":192512,\"tokenizer\":\"$LOCAL_MODEL_PATH\",\"trust_remote_code\":true,\"num_concurrent\":10,\"max_retries\":3,\"timeout\":12000,\"tokenized_requests\":false,\"headers\":{\"Authorization\":\"Bearer $API_KEY\"}}"
@@ -106,6 +124,11 @@ run_task_other() {
 	local limit_flag=""
 	[ -n "$LIMIT" ] && limit_flag="--limit $LIMIT"
 	
+	echo "" | tee -a "$LOG_FILE"
+	echo "========================================" | tee -a "$LOG_FILE"
+	echo "Running Task: $task_name" | tee -a "$LOG_FILE"
+	echo "========================================" | tee -a "$LOG_FILE"
+	
 	lm_eval \
 		--model local-completions \
 		--tasks $task_name \
@@ -114,7 +137,7 @@ run_task_other() {
 		--batch_size auto \
 		--gen_kwargs "$GEN_KWARGS" \
 		$limit_flag \
-		$unsafe_flag
+		$unsafe_flag 2>&1 | tee -a "$LOG_FILE"
 }
 
 
@@ -134,6 +157,11 @@ run_task_ruler() {
 	
 	local limit_flag="--limit $RULER_LIMIT"
 	
+	echo "" | tee -a "$LOG_FILE"
+	echo "========================================" | tee -a "$LOG_FILE"
+	echo "Running Task: $task_name" | tee -a "$LOG_FILE"
+	echo "========================================" | tee -a "$LOG_FILE"
+	
 	lm_eval \
 		--model local-completions \
 		--tasks $task_name \
@@ -142,7 +170,7 @@ run_task_ruler() {
 		--batch_size auto \
 		--gen_kwargs "$GEN_KWARGS" \
 		$limit_flag \
-		$unsafe_flag
+		$unsafe_flag 2>&1 | tee -a "$LOG_FILE"
 }
 
 IFS=',' read -ra TASK_LIST <<< "$TASKS"
@@ -150,15 +178,20 @@ for task in "${TASK_LIST[@]}"; do
     task=$(echo "$task" | xargs)
     case "$task" in
         mmlu_pro|gsm_plus)
-            echo "Running $task with run_task_other"
             run_task_other "$task" 8192 0.0 false
             ;;
         ruler)
-            echo "Running $task with run_task_ruler"
             run_task_ruler "$task" 8192 0.0 false
             ;;
         *)
-            echo "Unknown task: $task"
+            echo "Unknown task: $task" | tee -a "$LOG_FILE"
             ;;
     esac
 done
+
+echo "" | tee -a "$LOG_FILE"
+echo "========================================" | tee -a "$LOG_FILE"
+echo "lm-evaluation-harness Test Complete" | tee -a "$LOG_FILE"
+echo "Time: $(date '+%Y-%m-%d %H:%M:%S')" | tee -a "$LOG_FILE"
+echo "Log file: $LOG_FILE" | tee -a "$LOG_FILE"
+echo "========================================" | tee -a "$LOG_FILE"
