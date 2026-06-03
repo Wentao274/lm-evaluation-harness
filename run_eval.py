@@ -43,7 +43,6 @@ def main():
         f"./output/{args.tester}/{args.build_number}/{args.chip}/{args.model}/{timestamp}"
     )
     os.makedirs(output_dir, exist_ok=True)
-    log_file = os.path.join(output_dir, "test.log")
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
     shell_script = os.path.join(script_dir, "lm_eval_test.sh")
@@ -65,14 +64,12 @@ def main():
     cmd = ["bash", shell_script, args.tasks]
 
     print(f"Output directory: {output_dir}")
-    print(f"Log file: {log_file}")
     print(f"Command: {' '.join(cmd)}")
     print("=" * 60)
 
-    with open(log_file, "w") as f:
-        result = subprocess.run(cmd, env=env, stdout=f, stderr=subprocess.STDOUT)
+    result = subprocess.run(cmd, env=env)
 
-    print(f"Test completed. Log saved to: {log_file}")
+    print(f"Test completed. Output directory: {output_dir}")
     sys.exit(result.returncode)
 
 

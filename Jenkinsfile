@@ -8,8 +8,10 @@ pipeline {
         string(name: 'MODEL', defaultValue: 'kimi-k2.5', description: '模型服务名称 (必填)')
         string(name: 'MODEL_PATH', defaultValue: '/dingofs/data1/userdata/llms/moonshotai/Kimi-K2.6', description: '模型本地路径 (必填)')
         string(name: 'BASE_URL', defaultValue: 'http://10.201.149.10:8080', description: 'API 地址 (必填)')
-        string(name: 'TASKS', defaultValue: 'mmlu_pro', description: '测试任务 ( 必填，多个使用逗号分隔, 如: mmlu_pro,gsm_plus,ruler）')
-        string(name: 'LIMIT', defaultValue: '', description: '限制每个任务运行的样本数量 (非必填，为空则不限制，针对除Ruler任务以外的其他任务)')
+        booleanParam(name: 'TASK_MMLU_PRO', defaultValue: true, description: '运行 mmlu_pro 任务')
+        booleanParam(name: 'TASK_GSM_PLUS', defaultValue: false, description: '运行 gsm_plus 任务')
+        booleanParam(name: 'TASK_RULER', defaultValue: false, description: '运行 ruler 任务')
+        string(name: 'LIMIT', defaultValue: '10', description: '限制每个任务运行的样本数量 (非必填，为空则不限制，针对除Ruler任务以外的其他任务)')
         string(name: 'RULER_LIMIT', defaultValue: '32', description: '仅针对Ruler任务样本限制 (默认32)')
         text(name: 'RECIPIENTS', defaultValue: 'liwt@zetyun.com', description: '邮件接收者（逗号分隔）')
         string(name: 'WORK_DIR', defaultValue: '/dingofs/data1/userdata/liwt/maas-image/lm-evaluation-harness', description: '远程工作目录')
@@ -33,8 +35,22 @@ echo "工作目录: \$(pwd)"
 ls -la
 
 echo "=== 设置权限 ==="
-chmod -R 755 ./*
 chmod +x lm_eval_test.sh
+chmod +x run_eval.py
+
+echo "=== 检查并创建虚拟环境 ==="
+if [ ! -d "${params.WORK_DIR}/.venv" ]; then
+    export https_proxy=http://100.64.1.68:1080
+    export http_proxy=http://100.64.1.68:1080
+    echo "创建虚拟环境..."
+    cd ${params.WORK_DIR}
+    uv venv
+    unset https_proxy
+    unset http_proxy
+fi
+
+cd ${params.WORK_DIR}
+echo "=== 虚拟环境准备完成 ==="
 ENDSSH
 """
                 }
@@ -44,13 +60,25 @@ ENDSSH
         stage('运行lm-evaluation测试') {
             steps {
                 script {
+                    def taskList = []
+                    if (params.TASK_MMLU_PRO) taskList.add('mmlu_pro')
+                    if (params.TASK_GSM_PLUS) taskList.add('gsm_plus')
+                    if (params.TASK_RULER) taskList.add('ruler')
+                    if (taskList.isEmpty()) {
+                        error '至少需要选择一个测试任务'
+                    }
+                    env.TASKS = taskList.join(',')
+                    
                     withCredentials([string(credentialsId: "${API_KEY_CREDENTIALS}", variable: 'API_KEY')]) {
                         sshagent(credentials: ["${SSH_CREDENTIALS}"]) {
                             catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
                                 sh """
 ssh -o StrictHostKeyChecking=no ${REMOTE_USER}@${REMOTE_HOST} << ENDSSH
 set -e
+export LANG=en_US.UTF-8
+export LC_ALL=en_US.UTF-8
 cd ${params.WORK_DIR}
+source .venv/bin/activate
 echo "=== 参数信息 ==="
 echo "TESTER: ${params.TESTER}"
 echo "BUILD_NUMBER: ${BUILD_NUMBER}"
@@ -58,7 +86,7 @@ echo "CHIP: ${params.CHIP}"
 echo "MODEL: ${params.MODEL}"
 echo "MODEL_PATH: ${params.MODEL_PATH}"
 echo "BASE_URL: ${params.BASE_URL}"
-echo "TASKS: ${params.TASKS}"
+echo "TASKS: ${env.TASKS}"
 echo "LIMIT: ${params.LIMIT}"
 echo "RULER_LIMIT: ${params.RULER_LIMIT}"
 echo "=== 执行Python测试脚本 ==="
@@ -70,7 +98,7 @@ python3 run_eval.py \
     --model-path "${params.MODEL_PATH}" \
     --base-url ${params.BASE_URL} \
     --api-key ${API_KEY} \
-    --tasks ${params.TASKS} \
+    --tasks ${env.TASKS} \
     --limit "${params.LIMIT}" \
     --ruler-limit "${params.RULER_LIMIT}"
 echo "=== 测试脚本执行结束 ==="
@@ -90,14 +118,14 @@ ENDSSH
                 sshagent(credentials: ["${SSH_CREDENTIALS}"]) {
                     catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
                         script {
-                            def targetDir = "output/${params.TESTER}/${BUILD_NUMBER}/${params.CHIP}/${params.MODEL}"
-                            def localDir = "reports/${params.TESTER}/${BUILD_NUMBER}"
-                            env.RESULT_DIR = targetDir
-                            echo "拉取测试结果目录: ${targetDir}"
+                            def remoteDir = "${params.WORK_DIR}/output/${params.TESTER}/${BUILD_NUMBER}/${params.CHIP}/${params.MODEL}"
+                            def localDir = "reports/${params.TESTER}/${BUILD_NUMBER}/${params.CHIP}"
+                            env.RESULT_DIR = "output/${params.TESTER}/${BUILD_NUMBER}/${params.CHIP}/${params.MODEL}"
+                            echo "拉取测试结果目录: ${remoteDir}"
                             sh """
 mkdir -p ${localDir}
 scp -o StrictHostKeyChecking=no \
-    -r ${REMOTE_USER}@${REMOTE_HOST}:${params.WORK_DIR}/${targetDir} \
+    -r ${REMOTE_USER}@${REMOTE_HOST}:${remoteDir} \
     ${localDir}/
 echo "=== 拉取结果 ==="
 find ${localDir}/ -type f
@@ -112,22 +140,14 @@ find ${localDir}/ -type f
             steps {
                 catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
                     script {
-                        def tasksUnderscore = params.TASKS.replace(',', '-')
-                        def logFileBase = "reports/${params.TESTER}/${BUILD_NUMBER}/${params.CHIP}/${params.MODEL}"
-                        def logFilePattern = "${logFileBase}/lm-eval-*.log"
-                        def logFile = ""
                         def logContent = ""
+                        def logFile = ""
+                        def logFileBase = "reports/${params.TESTER}/${BUILD_NUMBER}/${params.CHIP}/${params.MODEL}"
                         
-                        def files = findFiles(glob: logFilePattern)
+                        def files = findFiles(glob: "${logFileBase}/**/lm-eval-*.log")
                         if (files.length > 0) {
                             logFile = files[0].path
                             logContent = readFile(logFile)
-                        } else {
-                            def logFileAlt = "${logFileBase}/test.log"
-                            if (fileExists(logFileAlt)) {
-                                logContent = readFile(logFileAlt)
-                                logFile = logFileAlt
-                            }
                         }
                         
                         def hasResult = logContent.length() > 0
@@ -142,13 +162,13 @@ find ${localDir}/ -type f
                         def rulerScore = extractMainScore(logContent, "ruler")
                         
                         def taskSummaryRows = ""
-                        if (params.TASKS.contains("mmlu_pro")) {
+                        if (env.TASKS.contains("mmlu_pro")) {
                             taskSummaryRows += "<tr><td>mmlu_pro</td><td>${mmluProScore}</td></tr>"
                         }
-                        if (params.TASKS.contains("gsm_plus")) {
+                        if (env.TASKS.contains("gsm_plus")) {
                             taskSummaryRows += "<tr><td>gsm_plus</td><td>${gsmPlusScore}</td></tr>"
                         }
-                        if (params.TASKS.contains("ruler")) {
+                        if (env.TASKS.contains("ruler")) {
                             taskSummaryRows += "<tr><td>ruler</td><td>${rulerScore}</td></tr>"
                         }
                         if (taskSummaryRows.isEmpty()) {
@@ -167,7 +187,6 @@ find ${localDir}/ -type f
         th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
         th { background-color: #f2f2f2; }
         .footer { margin-top: 20px; padding: 15px; background-color: #f9f9f9; border-radius: 0 0 5px 5px; color: #666; font-size: 12px; }
-        pre { background-color: #f4f4f4; padding: 10px; overflow-x: auto; border-radius: 3px; font-size: 12px; }
         .section-title { background-color: #e3f2fd; padding: 10px; margin-top: 20px; border-radius: 3px; font-weight: bold; }
         .score-highlight { background-color: #c8e6c9; font-weight: bold; }
     </style>
@@ -186,7 +205,7 @@ find ${localDir}/ -type f
                 <tr><th>模型名称</th><td>${params.MODEL}</td></tr>
                 <tr><th>模型路径</th><td>${params.MODEL_PATH}</td></tr>
                 <tr><th>API地址</th><td>${params.BASE_URL}</td></tr>
-                <tr><th>测试任务</th><td>${params.TASKS}</td></tr>
+                <tr><th>测试任务</th><td>${env.TASKS}</td></tr>
                 <tr><th>样本限制</th><td>${params.LIMIT ?: '无限制'}</td></tr>
                 <tr><th>Ruler样本限制</th><td>${params.RULER_LIMIT}</td></tr>
                 <tr><th>执行时间</th><td>${currentBuild.durationString}</td></tr>
@@ -201,30 +220,24 @@ find ${localDir}/ -type f
             </table>
 """
                         
-                        if (params.TASKS.contains("mmlu_pro") && mmluProTable) {
+                        if (env.TASKS.contains("mmlu_pro") && mmluProTable) {
                             emailBody += """
             <div class="section-title">MMLU_PRO 任务测试结果</div>
-            <table>
-                ${mmluProTable}
-            </table>
+            ${mmluProTable}
 """
                         }
                         
-                        if (params.TASKS.contains("gsm_plus") && gsmPlusTable) {
+                        if (env.TASKS.contains("gsm_plus") && gsmPlusTable) {
                             emailBody += """
             <div class="section-title">GSM_PLUS 任务测试结果</div>
-            <table>
-                ${gsmPlusTable}
-            </table>
+            ${gsmPlusTable}
 """
                         }
                         
-                        if (params.TASKS.contains("ruler") && rulerTable) {
+                        if (env.TASKS.contains("ruler") && rulerTable) {
                             emailBody += """
             <div class="section-title">RULER 任务测试结果</div>
-            <table>
-                ${rulerTable}
-            </table>
+            ${rulerTable}
 """
                         }
                         
@@ -250,12 +263,13 @@ find ${localDir}/ -type f
                         echo "gsm_plus 得分: ${gsmPlusScore}"
                         echo "ruler 得分: ${rulerScore}"
                         
+                        def attachPattern = logFile ? "${logFile}" : ""
                         emailext(
-                            subject: "[模型推理 - lm-evaluation测试报告] #${BUILD_NUMBER} ${params.CHIP} - ${params.MODEL}",
+                            subject: "[模型推理 - lm-evaluation精度测试报告] #${BUILD_NUMBER} ${params.CHIP} - ${params.MODEL}",
                             body: emailBody,
                             to: "${params.RECIPIENTS}",
                             mimeType: 'text/html',
-                            attachmentsPattern: logFilePattern
+                            attachmentsPattern: attachPattern
                         )
                     }
                 }
@@ -265,8 +279,7 @@ find ${localDir}/ -type f
     post {
         always {
             script {
-                def logFilePattern = "reports/${params.TESTER}/${BUILD_NUMBER}/${params.CHIP}/${params.MODEL}/*"
-                archiveArtifacts artifacts: logFilePattern, allowEmptyArchive: true, fingerprint: true
+                archiveArtifacts artifacts: "reports/${params.TESTER}/${BUILD_NUMBER}/**", allowEmptyArchive: true, fingerprint: true
                 echo "构建完成: ${currentBuild.currentResult}"
             }
         }
@@ -276,77 +289,189 @@ find ${localDir}/ -type f
     }
 }
 
-def extractLmEvalTable(String content, String taskName) {
+def extractLmEvalTable(String content, String tName) {
     def lines = content.split('\n')
-    def inTable = false
-    def tableLines = []
-    def headerFound = false
+    def taskRows = []
+    def groupRows = []
+    def inSection = false
+    def currentTable = null
     
     for (int i = 0; i < lines.size(); i++) {
-        def line = lines[i]
+        def line = lines[i].trim()
         
-        if (line.contains("Running Task: ${taskName}") || (taskName == "mmlu_pro" && line.contains("|mmlu_pro"))) {
-            inTable = true
-            headerFound = false
+        if (line.contains("Running Task: ${tName}")) {
+            inSection = true
+            taskRows = []
+            groupRows = []
+            currentTable = null
+        }
+        if (!inSection) continue
+        if (line.contains("Running Task:") && !line.contains(tName)) {
+            inSection = false
+            continue
         }
         
-        if (inTable && line =~ /\|.*\|.*\|/) {
-            def trimmed = line.trim()
-            if (trimmed && trimmed.startsWith("|")) {
-                if (trimmed.contains("Tasks") || trimmed.contains("Groups") || trimmed.contains("Version") || trimmed.contains("-") || trimmed.contains("mmlu_pro") || trimmed.contains("gsm_plus") || trimmed.contains("ruler") || trimmed.contains("niah") || trimmed.contains("ruler_")) {
-                    tableLines.add(trimmed)
-                    headerFound = true
-                }
-            }
-        } else if (inTable && headerFound && line.trim() && !line.trim().startsWith("|") && !line.contains("Running")) {
-            inTable = false
+        if (line.startsWith("|") && line.contains("Tasks") && line.contains("Version") && line.contains("Metric")) {
+            currentTable = 'tasks'
+            continue
+        }
+        if (line.startsWith("|") && line.contains("Groups") && line.contains("Version")) {
+            currentTable = 'groups'
+            continue
+        }
+        if (line.startsWith("|") && line.contains("---")) continue
+        if (!line.startsWith("|")) continue
+        if (currentTable == null) continue
+        
+        def row = parsePipeRow(line)
+        if (row != null) {
+            if (currentTable == 'tasks') taskRows.add(row)
+            else groupRows.add(row)
         }
     }
     
-    if (tableLines.isEmpty()) {
-        return ""
+    if (taskRows.isEmpty() && groupRows.isEmpty()) return ""
+    
+    def html = ""
+    
+    def summaryRow = null
+    if (groupRows.size() > 0) {
+        summaryRow = groupRows[0]
+    } else {
+        for (def r : taskRows) {
+            if (r.name == tName) { summaryRow = r; break }
+        }
     }
     
-    def html = "<tr><th>任务</th><th>Version</th><th>Filter</th><th>n-shot</th><th>Metric</th><th>Value</th><th>Stderr</th></tr>"
-    
-    tableLines.each { line ->
-        def cells = line.split("\\|").collect { it.trim() }.findAll { it }
-        if (cells.size() >= 5) {
-            def taskName = cells[0]
-            def version = cells.size() > 1 ? cells[1] : ""
-            def filter = cells.size() > 2 ? cells[2] : ""
-            def nshot = cells.size() > 3 ? cells[3] : ""
-            def metric = cells.size() > 4 ? cells[4] : ""
-            def value = cells.size() > 5 ? cells[5] : ""
-            def stderr = cells.size() > 6 ? cells[6] : ""
-            
-            def rowClass = ""
-            if (taskName.contains("-")) {
-                rowClass = "style=\"background-color: #f9f9f9;\""
-            } else if (taskName == "mmlu_pro" || taskName == "gsm_plus" || taskName == "ruler" || taskName == "Groups" || taskName == "mmlu_pro") {
-                rowClass = "class=\"score-highlight\""
+    if (tName == "ruler") {
+        def subVals = []
+        for (def r : taskRows) {
+            if (r.name.startsWith("-") && r.value != "" && r.value != "N/A") {
+                subVals.add(r)
             }
-            
-            html += "<tr ${rowClass}><td>${taskName}</td><td>${version}</td><td>${filter}</td><td>${nshot}</td><td>${metric}</td><td>${value}</td><td>${stderr}</td></tr>"
         }
+        if (summaryRow == null && subVals.size() > 0) {
+            def ref = subVals[0]
+            def sum = 0.0
+            def count = 0
+            for (def r : subVals) {
+                sum += r.value.toDouble()
+                count++
+            }
+            def avgVal = count > 0 ? String.format("%.4f", sum / count) : "N/A"
+            summaryRow = [name: "ruler", version: ref.version, filter: ref.filter, nshot: ref.nshot, metric: ref.metric, value: avgVal, stderr: "N/A"]
+        } else if (summaryRow != null && (summaryRow.value == "" || summaryRow.value == "N/A") && subVals.size() > 0) {
+            def sum = 0.0
+            def count = 0
+            for (def r : subVals) {
+                sum += r.value.toDouble()
+                count++
+            }
+            if (count > 0) {
+                summaryRow.value = String.format("%.4f", sum / count)
+                summaryRow.stderr = "N/A"
+            }
+        }
+    }
+    
+    def subTaskRows = []
+    def siblingRows = []
+    for (def r : taskRows) {
+        if (r.name.startsWith("-") || r.name.startsWith(" -")) {
+            subTaskRows.add(r)
+        } else if (r.name == "" && r.filter != "") {
+            siblingRows.add(r)
+        }
+    }
+    
+    html += "<table><tr><th>任务</th><th>Version</th><th>Filter</th><th>n-shot</th><th>Metric</th><th>Value</th><th>Stderr</th></tr>"
+    if (summaryRow != null) {
+        html += "<tr class=\"score-highlight\"><td>${summaryRow.name}</td><td>${summaryRow.version}</td><td>${summaryRow.filter}</td><td>${summaryRow.nshot}</td><td>${summaryRow.metric}</td><td>${summaryRow.value}</td><td>${summaryRow.stderr}</td></tr>"
+    }
+    for (def r : siblingRows) {
+        html += "<tr><td>${tName}</td><td>${r.version}</td><td>${r.filter}</td><td>${r.nshot}</td><td>${r.metric}</td><td>${r.value}</td><td>${r.stderr}</td></tr>"
+    }
+    html += "</table>"
+    
+    if (subTaskRows.size() > 0) {
+        html += "<table style=\"margin-top: 10px;\"><tr><th>子任务</th><th>Version</th><th>Filter</th><th>n-shot</th><th>Metric</th><th>Value</th><th>Stderr</th></tr>"
+        for (def r : subTaskRows) {
+            html += "<tr style=\"background-color: #f9f9f9;\"><td>${r.name}</td><td>${r.version}</td><td>${r.filter}</td><td>${r.nshot}</td><td>${r.metric}</td><td>${r.value}</td><td>${r.stderr}</td></tr>"
+        }
+        html += "</table>"
     }
     
     return html
 }
 
-def extractMainScore(String content, String taskName) {
-    def pattern = ""
-    if (taskName == "mmlu_pro") {
-        pattern = /\|mmlu_pro\s+\|\s*(\d+)\|.*?\|(\d+\.\d+)\|/
-    } else if (taskName == "gsm_plus") {
-        pattern = /\|gsm_plus\s+\|\s*(\d+)\|.*?\|(\d+\.\d+)\|/
-    } else if (taskName == "ruler") {
-        pattern = /\|Groups\|.*?\|(\d+\.\d+)\|/
+def parsePipeRow(String line) {
+    def rawCells = line.split("\\|", -1)
+    def cells = rawCells.collect { it.trim() }
+    
+    def upIdx = -1
+    def pmIdx = -1
+    for (int i = 0; i < cells.size(); i++) {
+        if (cells[i] == '↑') upIdx = i
+        if (cells[i] == '±') pmIdx = i
     }
     
-    def matcher = content =~ pattern
-    if (matcher.find()) {
-        return matcher.group(2)
+    def value = ""
+    def stderr = ""
+    if (upIdx >= 0 && upIdx + 1 < cells.size()) value = cells[upIdx + 1].trim()
+    if (pmIdx >= 0 && pmIdx + 1 < cells.size()) stderr = cells[pmIdx + 1].trim()
+    
+    def name = cells.size() > 1 ? cells[1].trim() : ""
+    def version = cells.size() > 2 ? cells[2].trim() : ""
+    def filter = cells.size() > 3 ? cells[3].trim() : ""
+    def nshot = cells.size() > 4 ? cells[4].trim() : ""
+    def metric = cells.size() > 5 ? cells[5].trim() : ""
+    
+    if (name == "" && value == "" && metric == "") return null
+    
+    return [name: name, version: version, filter: filter, nshot: nshot, metric: metric, value: value, stderr: stderr]
+}
+
+def extractMainScore(String content, String tName) {
+    def lines = content.split('\n')
+    
+    if (tName == "gsm_plus") {
+        for (int i = 0; i < lines.size(); i++) {
+            def line = lines[i].trim()
+            if (!line.startsWith("|")) continue
+            if (!line.contains("strict-match")) continue
+            def row = parsePipeRow(line)
+            if (row != null && row.value != "" && row.value != "N/A") {
+                return row.value
+            }
+        }
     }
+    
+    for (int i = 0; i < lines.size(); i++) {
+        def line = lines[i].trim()
+        if (!line.startsWith("|")) continue
+        if (!line.contains(tName)) continue
+        
+        def row = parsePipeRow(line)
+        if (row != null && row.name == tName && row.value != "" && row.value != "N/A") {
+            def prev = i > 0 ? lines[i - 1].trim() : ""
+            if (prev.contains("Groups") || prev.contains("---")) {
+                return row.value
+            }
+        }
+    }
+    
+    for (int i = 0; i < lines.size(); i++) {
+        def line = lines[i].trim()
+        if (!line.startsWith("|")) continue
+        if (!line.contains(tName)) continue
+        
+        def row = parsePipeRow(line)
+        if (row != null && row.name == tName && row.value != "" && row.value != "N/A") {
+            if (!line.contains(" -")) {
+                return row.value
+            }
+        }
+    }
+    
     return "N/A"
 }
