@@ -72,7 +72,7 @@ ENDSSH
                     def modelDir = params.MODEL.contains("/") ? params.MODEL.split("/").last() : params.MODEL
                     env.MODEL_DIR = modelDir
                     
-                    if (!params.API_KEY?.trim()) {
+                    if (!params.API_KEY?.toString()?.trim()) {
                         error 'API_KEY 不能为空'
                     }
                     
@@ -112,6 +112,7 @@ echo "=== 输出目录 ==="
 find output/${params.TESTER}/${BUILD_NUMBER}/${params.CHIP}/${env.MODEL_DIR}/ -type f
 ENDSSH
 """
+                        }
                     }
                 }
             }
