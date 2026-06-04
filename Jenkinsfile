@@ -8,7 +8,7 @@ pipeline {
         string(name: 'MODEL', defaultValue: 'kimi-k2.5', description: '模型服务名称 (必填)')
         string(name: 'MODEL_PATH', defaultValue: '/dingofs/data1/userdata/llms/moonshotai/Kimi-K2.6', description: '模型本地路径 (必填)')
         string(name: 'BASE_URL', defaultValue: 'http://10.201.149.10:8080', description: 'API 地址 (必填)')
-        password(name: 'API_KEY', defaultValue: '', description: '模型 API Key (必填)')
+        password(name: 'API_KEY', defaultValue: '', description: '模型 API Key (非必填，无认证时留空)')
         booleanParam(name: 'TASK_MMLU_PRO', defaultValue: true, description: '运行 mmlu_pro 任务')
         booleanParam(name: 'TASK_GSM_PLUS', defaultValue: true, description: '运行 gsm_plus 任务')
         booleanParam(name: 'TASK_RULER', defaultValue: false, description: '运行 ruler 任务')
@@ -71,10 +71,6 @@ ENDSSH
                     
                     def modelDir = params.MODEL.contains("/") ? params.MODEL.split("/").last() : params.MODEL
                     env.MODEL_DIR = modelDir
-                    
-                    if (!params.API_KEY?.toString()?.trim()) {
-                        error 'API_KEY 不能为空'
-                    }
                     
                     sshagent(credentials: ["${SSH_CREDENTIALS}"]) {
                         catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {

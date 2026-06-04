@@ -17,7 +17,7 @@ def parse_args():
         "--base-url", required=True, help="LLM base URL (e.g., http://127.0.0.1:8080)"
     )
     parser.add_argument(
-        "--api-key", required=True, help="API key for Bearer authentication"
+        "--api-key", default="", help="API key for Bearer authentication (optional)"
     )
     parser.add_argument(
         "--tasks",
@@ -54,7 +54,8 @@ def main():
 
     env = os.environ.copy()
     env["LLM_ADDR"] = args.base_url
-    env["API_KEY"] = args.api_key
+    if args.api_key:
+        env["API_KEY"] = args.api_key
     env["MODEL_NAME"] = args.model
     env["LOCAL_MODEL_PATH"] = args.model_path
     env["OUTPUT_BASE"] = output_dir
