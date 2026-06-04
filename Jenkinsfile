@@ -1,7 +1,7 @@
 pipeline {
     agent any
     parameters {
-        string(name: 'TESTER', description: '测试人员名称 (必填)')
+        string(name: 'TESTER', defaultValue: 'liwt', description: '测试人员名称 (必填)')
         choice(name: 'INFRA', choices: ['vllm', 'sglang'], description: '推理框架')
         choice(name: 'PD', choices: ['agg', 'disagg'], description: 'PD分离模式,agg 表示非 PD 分离, disagg 表示 PD 分离')
         string(name: 'CHIP', defaultValue: 'nvidia-h100', description: '芯片平台名称 (必填)')
@@ -9,9 +9,9 @@ pipeline {
         string(name: 'MODEL_PATH', defaultValue: '/dingofs/data1/userdata/llms/moonshotai/Kimi-K2.6', description: '模型本地路径 (必填)')
         string(name: 'BASE_URL', defaultValue: 'http://10.201.149.10:8080', description: 'API 地址 (必填)')
         booleanParam(name: 'TASK_MMLU_PRO', defaultValue: true, description: '运行 mmlu_pro 任务')
-        booleanParam(name: 'TASK_GSM_PLUS', defaultValue: false, description: '运行 gsm_plus 任务')
+        booleanParam(name: 'TASK_GSM_PLUS', defaultValue: true, description: '运行 gsm_plus 任务')
         booleanParam(name: 'TASK_RULER', defaultValue: false, description: '运行 ruler 任务')
-        string(name: 'LIMIT', defaultValue: '10', description: '限制每个任务运行的样本数量 (非必填，为空则不限制，针对除Ruler任务以外的其他任务)')
+        string(name: 'LIMIT', defaultValue: '', description: '限制每个任务运行的样本数量 (非必填，为空则不限制，针对除Ruler任务以外的其他任务)')
         string(name: 'RULER_LIMIT', defaultValue: '32', description: '仅针对Ruler任务样本限制 (默认32)')
         text(name: 'RECIPIENTS', defaultValue: 'liwt@zetyun.com', description: '邮件接收者（逗号分隔）')
         string(name: 'WORK_DIR', defaultValue: '/dingofs/data1/userdata/liwt/maas-image/lm-evaluation-harness', description: '远程工作目录')
@@ -470,6 +470,26 @@ def extractMainScore(String content, String tName) {
             if (!line.contains(" -")) {
                 return row.value
             }
+        }
+    }
+    
+    if (tName == "ruler") {
+        def sum = 0.0
+        def count = 0
+        for (int i = 0; i < lines.size(); i++) {
+            def line = lines[i].trim()
+            if (!line.startsWith("|")) continue
+            if (!line.contains("niah") && !line.contains("ruler_")) continue
+            if (!line.contains(" -")) continue
+            
+            def row = parsePipeRow(line)
+            if (row != null && row.value != "" && row.value != "N/A") {
+                sum += row.value.toDouble()
+                count++
+            }
+        }
+        if (count > 0) {
+            return String.format("%.4f", sum / count)
         }
     }
     
