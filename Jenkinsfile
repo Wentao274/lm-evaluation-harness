@@ -5,8 +5,8 @@ pipeline {
         choice(name: 'INFRA', choices: ['vllm', 'sglang'], description: '推理框架')
         choice(name: 'PD', choices: ['agg', 'disagg'], description: 'PD分离模式,agg 表示非 PD 分离, disagg 表示 PD 分离')
         string(name: 'CHIP', defaultValue: 'nvidia-h100', description: '芯片平台名称 (必填)')
-        string(name: 'MODEL', defaultValue: 'kimi-k2.5', description: '模型服务名称 (必填)')
-        string(name: 'MODEL_PATH', defaultValue: '/dingofs/data1/userdata/llms/moonshotai/Kimi-K2.6', description: '模型本地路径 (必填)')
+        string(name: 'MODEL', defaultValue: 'kimi-k2.5', description: '模型服务名称 (served-model-name, 必填)')
+        string(name: 'MODEL_PATH', defaultValue: '/dingofs/data1/userdata/llms/moonshotai/Kimi-K2.6', description: '模型文件本地路径 (必填，目前仅支持五区的模型路径，请只修改xxx/llms/后的路径名，前面的不要改动)')
         string(name: 'BASE_URL', defaultValue: 'http://10.201.149.10:8080', description: 'API 地址 (必填)')
         password(name: 'API_KEY', defaultValue: '', description: '模型 API Key (非必填，无认证时留空)')
         booleanParam(name: 'TASK_MMLU_PRO', defaultValue: true, description: '运行 mmlu_pro 任务')
@@ -15,7 +15,7 @@ pipeline {
         string(name: 'LIMIT', defaultValue: '', description: '限制每个任务运行的样本数量 (非必填，为空则不限制，针对除Ruler任务以外的其他任务)')
         string(name: 'RULER_LIMIT', defaultValue: '32', description: '仅针对Ruler任务样本限制 (默认32)')
         text(name: 'RECIPIENTS', defaultValue: 'liwt@zetyun.com', description: '邮件接收者（逗号分隔）')
-        string(name: 'WORK_DIR', defaultValue: '/dingofs/data1/userdata/liwt/maas-image/lm-evaluation-harness', description: '远程工作目录')
+        string(name: 'WORK_DIR', defaultValue: '/dingofs/data1/userdata/liwt/maas-image/lm-evaluation-harness', description: '代码仓库目录，请不要改动')
     }
     environment {
         SSH_CREDENTIALS = 'HOST_SSH_KEY'
