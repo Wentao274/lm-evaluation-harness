@@ -39,8 +39,9 @@ def main():
     args = parse_args()
 
     timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    model_dir = args.model.split("/")[-1]
     output_dir = os.path.abspath(
-        f"./output/{args.tester}/{args.build_number}/{args.chip}/{args.model}/{timestamp}"
+        f"./output/{args.tester}/{args.build_number}/{args.chip}/{model_dir}/{timestamp}"
     )
     os.makedirs(output_dir, exist_ok=True)
 

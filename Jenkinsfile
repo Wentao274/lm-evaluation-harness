@@ -8,6 +8,7 @@ pipeline {
         string(name: 'MODEL', defaultValue: 'kimi-k2.5', description: '模型服务名称 (必填)')
         string(name: 'MODEL_PATH', defaultValue: '/dingofs/data1/userdata/llms/moonshotai/Kimi-K2.6', description: '模型本地路径 (必填)')
         string(name: 'BASE_URL', defaultValue: 'http://10.201.149.10:8080', description: 'API 地址 (必填)')
+        password(name: 'API_KEY', defaultValue: '', description: '模型 API Key (必填)')
         booleanParam(name: 'TASK_MMLU_PRO', defaultValue: true, description: '运行 mmlu_pro 任务')
         booleanParam(name: 'TASK_GSM_PLUS', defaultValue: true, description: '运行 gsm_plus 任务')
         booleanParam(name: 'TASK_RULER', defaultValue: false, description: '运行 ruler 任务')
@@ -18,7 +19,6 @@ pipeline {
     }
     environment {
         SSH_CREDENTIALS = 'HOST_SSH_KEY'
-        API_KEY_CREDENTIALS = 'API_KEY'
         REMOTE_HOST = '10.201.132.50'
         REMOTE_USER = 'root'
     }
@@ -69,9 +69,15 @@ ENDSSH
                     }
                     env.TASKS = taskList.join(',')
                     
-                    withCredentials([string(credentialsId: "${API_KEY_CREDENTIALS}", variable: 'API_KEY')]) {
-                        sshagent(credentials: ["${SSH_CREDENTIALS}"]) {
-                            catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
+                    def modelDir = params.MODEL.contains("/") ? params.MODEL.split("/").last() : params.MODEL
+                    env.MODEL_DIR = modelDir
+                    
+                    if (!params.API_KEY?.trim()) {
+                        error 'API_KEY 不能为空'
+                    }
+                    
+                    sshagent(credentials: ["${SSH_CREDENTIALS}"]) {
+                        catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
                                 sh """
 ssh -o StrictHostKeyChecking=no ${REMOTE_USER}@${REMOTE_HOST} << ENDSSH
 set -e
@@ -97,17 +103,15 @@ python3 run_eval.py \
     --model ${params.MODEL} \
     --model-path "${params.MODEL_PATH}" \
     --base-url ${params.BASE_URL} \
-    --api-key ${API_KEY} \
+    --api-key ${params.API_KEY} \
     --tasks ${env.TASKS} \
     --limit "${params.LIMIT}" \
     --ruler-limit "${params.RULER_LIMIT}"
 echo "=== 测试脚本执行结束 ==="
 echo "=== 输出目录 ==="
-find output/${params.TESTER}/${BUILD_NUMBER}/${params.CHIP}/${params.MODEL}/ -type f
+find output/${params.TESTER}/${BUILD_NUMBER}/${params.CHIP}/${env.MODEL_DIR}/ -type f
 ENDSSH
 """
-                            }
-                        }
                     }
                 }
             }
@@ -118,9 +122,9 @@ ENDSSH
                 sshagent(credentials: ["${SSH_CREDENTIALS}"]) {
                     catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
                         script {
-                            def remoteDir = "${params.WORK_DIR}/output/${params.TESTER}/${BUILD_NUMBER}/${params.CHIP}/${params.MODEL}"
+                            def remoteDir = "${params.WORK_DIR}/output/${params.TESTER}/${BUILD_NUMBER}/${params.CHIP}/${env.MODEL_DIR}"
                             def localDir = "reports/${params.TESTER}/${BUILD_NUMBER}/${params.CHIP}"
-                            env.RESULT_DIR = "output/${params.TESTER}/${BUILD_NUMBER}/${params.CHIP}/${params.MODEL}"
+                            env.RESULT_DIR = "output/${params.TESTER}/${BUILD_NUMBER}/${params.CHIP}/${env.MODEL_DIR}"
                             echo "拉取测试结果目录: ${remoteDir}"
                             sh """
 mkdir -p ${localDir}
@@ -142,7 +146,7 @@ find ${localDir}/ -type f
                     script {
                         def logContent = ""
                         def logFile = ""
-                        def logFileBase = "reports/${params.TESTER}/${BUILD_NUMBER}/${params.CHIP}/${params.MODEL}"
+                        def logFileBase = "reports/${params.TESTER}/${BUILD_NUMBER}/${params.CHIP}/${env.MODEL_DIR}"
                         
                         def files = findFiles(glob: "${logFileBase}/**/lm-eval-*.log")
                         if (files.length > 0) {
