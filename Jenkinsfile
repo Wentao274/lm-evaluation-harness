@@ -7,7 +7,7 @@ pipeline {
         string(name: 'CHIP', defaultValue: 'nvidia-h100', description: '芯片平台名称 (必填)')
         string(name: 'MODEL', defaultValue: 'kimi-k2.5', description: '模型服务名称 (served-model-name, 必填)')
         string(name: 'MODEL_PATH', defaultValue: '/dingofs/data1/userdata/llms/moonshotai/Kimi-K2.6', description: '模型文件本地路径 (必填，目前仅支持五区的模型路径，请只修改xxx/llms/后的路径名，前面的不要改动)')
-        string(name: 'BASE_URL', defaultValue: 'http://10.201.149.10:8080', description: 'API 地址 (必填)')
+        string(name: 'BASE_URL', defaultValue: 'http://10.201.149.10:8080', description: 'API 地址 (必填，注意没有/v1后缀)')
         password(name: 'API_KEY', defaultValue: '', description: '模型 API Key (非必填，无认证时留空)')
         booleanParam(name: 'TASK_MMLU_PRO', defaultValue: true, description: '运行 mmlu_pro 任务')
         booleanParam(name: 'TASK_GSM_PLUS', defaultValue: true, description: '运行 gsm_plus 任务')
@@ -72,6 +72,8 @@ ENDSSH
                     def modelDir = params.MODEL.contains("/") ? params.MODEL.split("/").last() : params.MODEL
                     env.MODEL_DIR = modelDir
                     
+                    env.API_KEY_STR = params.API_KEY?.toString() ?: ''
+                    
                     sshagent(credentials: ["${SSH_CREDENTIALS}"]) {
                         catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
                                 sh """
@@ -99,7 +101,7 @@ python3 run_eval.py \
     --model ${params.MODEL} \
     --model-path "${params.MODEL_PATH}" \
     --base-url ${params.BASE_URL} \
-    --api-key ${params.API_KEY} \
+    --api-key "${env.API_KEY_STR ?: 'abc123'}" \
     --tasks ${env.TASKS} \
     --limit "${params.LIMIT}" \
     --ruler-limit "${params.RULER_LIMIT}"
