@@ -118,7 +118,7 @@ echo "========================================" | tee -a "$LOG_FILE"
 
 # model_args 构造
 MODEL_ARGS_BASE_1="{\"model\":\"$MODEL_NAME\",\"base_url\":\"$LLM_ADDR$API_URL_SUFFIX\",\"max_length\":131072,\"tokenizer\":\"$LOCAL_MODEL_PATH\",\"trust_remote_code\":true,\"num_concurrent\":10,\"max_retries\":3,\"timeout\":12000,\"tokenized_requests\":false,\"headers\":{\"Authorization\":\"Bearer $API_KEY\"}}"
-MODEL_ARGS_BASE_2="{\"model\":\"$MODEL_NAME\",\"base_url\":\"$LLM_ADDR$API_URL_SUFFIX\",\"max_length\":192512,\"tokenizer\":\"$LOCAL_MODEL_PATH\",\"trust_remote_code\":true,\"num_concurrent\":10,\"max_retries\":3,\"timeout\":12000,\"tokenized_requests\":false,\"headers\":{\"Authorization\":\"Bearer $API_KEY\"}}"
+MODEL_ARGS_BASE_2="{\"model\":\"$MODEL_NAME\",\"base_url\":\"$LLM_ADDR$API_URL_SUFFIX\",\"max_length\":162816,\"tokenizer\":\"$LOCAL_MODEL_PATH\",\"trust_remote_code\":true,\"num_concurrent\":10,\"max_retries\":3,\"timeout\":12000,\"tokenized_requests\":false,\"headers\":{\"Authorization\":\"Bearer $API_KEY\"}}"
 
 # 运行单个任务的函数
 run_task_other() {
@@ -194,10 +194,10 @@ for task in "${TASK_LIST[@]}"; do
     task=$(echo "$task" | xargs)
     case "$task" in
         mmlu_pro|gsm_plus)
-            run_task_other "$task" 8192 0.0 false
+            run_task_other "$task" 32768 0.0 false
             ;;
         ruler)
-            run_task_ruler "$task" 8192 0.0 false
+            run_task_ruler "$task" 32768 0.0 false
             ;;
         *)
             echo "Unknown task: $task" | tee -a "$LOG_FILE"
