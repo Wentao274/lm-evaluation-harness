@@ -20,6 +20,12 @@ def parse_args():
         "--api-key", default="", help="API key for Bearer authentication (optional)"
     )
     parser.add_argument(
+        "--chat-api",
+        default="OpenAI Completions",
+        choices=["OpenAI Completions", "OpenAI ChatCompletions"],
+        help="API endpoint type (default: OpenAI Completions)",
+    )
+    parser.add_argument(
         "--tasks",
         default="mmlu_pro",
         help="Tasks to run, comma-separated (default: mmlu_pro)",
@@ -59,6 +65,7 @@ def main():
     env["MODEL_NAME"] = args.model
     env["LOCAL_MODEL_PATH"] = args.model_path
     env["OUTPUT_BASE"] = output_dir
+    env["CHAT_APT"] = args.chat_api
     if args.limit:
         env["LIMIT"] = args.limit
     env["RULER_LIMIT"] = args.ruler_limit

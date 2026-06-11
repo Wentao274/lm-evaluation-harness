@@ -9,6 +9,7 @@ pipeline {
         string(name: 'MODEL_PATH', defaultValue: '/dingofs/data1/userdata/llms/moonshotai/Kimi-K2.6', description: '模型文件本地路径 (必填，目前仅支持五区的模型路径，请只修改xxx/llms/后的路径名，前面的不要改动)')
         string(name: 'BASE_URL', defaultValue: 'http://10.201.149.10:8080', description: 'API 地址 (必填，注意没有/v1后缀)')
         password(name: 'API_KEY', defaultValue: '', description: '模型 API Key (非必填，无认证时留空)')
+        choice(name: 'CHAT_API', choices: ['OpenAI Completions', 'OpenAI ChatCompletions'], description: '接口类型, OpenAI Completions 使用 /v1/completions, OpenAI ChatCompletions 使用 /v1/chat/completions')
         booleanParam(name: 'TASK_MMLU_PRO', defaultValue: true, description: '运行 mmlu_pro 任务')
         booleanParam(name: 'TASK_GSM_PLUS', defaultValue: true, description: '运行 gsm_plus 任务')
         booleanParam(name: 'TASK_RULER', defaultValue: false, description: '运行 ruler 任务')
@@ -90,6 +91,7 @@ echo "CHIP: ${params.CHIP}"
 echo "MODEL: ${params.MODEL}"
 echo "MODEL_PATH: ${params.MODEL_PATH}"
 echo "BASE_URL: ${params.BASE_URL}"
+echo "CHAT_API: ${params.CHAT_API}"
 echo "TASKS: ${env.TASKS}"
 echo "LIMIT: ${params.LIMIT}"
 echo "RULER_LIMIT: ${params.RULER_LIMIT}"
@@ -102,6 +104,7 @@ python3 run_eval.py \
     --model-path "${params.MODEL_PATH}" \
     --base-url ${params.BASE_URL} \
     --api-key "${env.API_KEY_STR ?: 'abc123'}" \
+    --chat-api "${params.CHAT_API}" \
     --tasks ${env.TASKS} \
     --limit "${params.LIMIT}" \
     --ruler-limit "${params.RULER_LIMIT}"
@@ -208,6 +211,7 @@ find ${localDir}/ -type f
                 <tr><th>模型名称</th><td>${params.MODEL}</td></tr>
                 <tr><th>模型路径</th><td>${params.MODEL_PATH}</td></tr>
                 <tr><th>API地址</th><td>${params.BASE_URL}</td></tr>
+                <tr><th>接口类型</th><td>${params.CHAT_API}</td></tr>
                 <tr><th>测试任务</th><td>${env.TASKS}</td></tr>
                 <tr><th>样本限制</th><td>${params.LIMIT ?: '无限制'}</td></tr>
                 <tr><th>Ruler样本限制</th><td>${params.RULER_LIMIT}</td></tr>

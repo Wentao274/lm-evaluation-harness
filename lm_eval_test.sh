@@ -20,6 +20,17 @@ LOCAL_MODEL_PATH=${LOCAL_MODEL_PATH:-"/dingofs/data1/userdata/llms/moonshotai/Ki
 OUTPUT_BASE=${OUTPUT_BASE:-./output_h100}
 LIMIT=${LIMIT:-}
 RULER_LIMIT=${RULER_LIMIT:-32}
+CHAT_API=${CHAT_API:-"OpenAI Completions"}
+
+if [ "$CHAT_API" = "OpenAI ChatCompletions" ]; then
+    API_MODEL="local-chat-completions"
+    API_URL_SUFFIX="/v1/chat/completions"
+    CHAT_TEMPLATE_FLAG="--apply_chat_template"
+else
+    API_MODEL="local-completions"
+    API_URL_SUFFIX="/v1/completions"
+    CHAT_TEMPLATE_FLAG=""
+fi
 
 usage() {
     echo "Usage: $0 [OPTIONS] TASK"
@@ -97,14 +108,17 @@ echo "========================================" | tee -a "$LOG_FILE"
 echo "Config:" | tee -a "$LOG_FILE"
 echo "  LLM_ADDR: $LLM_ADDR" | tee -a "$LOG_FILE"
 echo "  MODEL_NAME: $MODEL_NAME" | tee -a "$LOG_FILE"
+echo "  CHAT_API: $CHAT_API" | tee -a "$LOG_FILE"
+echo "  API_MODEL: $API_MODEL" | tee -a "$LOG_FILE"
+echo "  API_URL: $LLM_ADDR$API_URL_SUFFIX" | tee -a "$LOG_FILE"
 echo "  TASKS: $TASKS" | tee -a "$LOG_FILE"
 echo "  LIMIT: ${LIMIT:-<unlimited>}" | tee -a "$LOG_FILE"
 echo "  RULER_LIMIT: $RULER_LIMIT" | tee -a "$LOG_FILE"
 echo "========================================" | tee -a "$LOG_FILE"
 
 # model_args 构造
-MODEL_ARGS_BASE_1="{\"model\":\"$MODEL_NAME\",\"base_url\":\"$LLM_ADDR/v1/completions\",\"max_length\":131072,\"tokenizer\":\"$LOCAL_MODEL_PATH\",\"trust_remote_code\":true,\"num_concurrent\":10,\"max_retries\":3,\"timeout\":12000,\"tokenized_requests\":false,\"headers\":{\"Authorization\":\"Bearer $API_KEY\"}}"
-MODEL_ARGS_BASE_2="{\"model\":\"$MODEL_NAME\",\"base_url\":\"$LLM_ADDR/v1/completions\",\"max_length\":192512,\"tokenizer\":\"$LOCAL_MODEL_PATH\",\"trust_remote_code\":true,\"num_concurrent\":10,\"max_retries\":3,\"timeout\":12000,\"tokenized_requests\":false,\"headers\":{\"Authorization\":\"Bearer $API_KEY\"}}"
+MODEL_ARGS_BASE_1="{\"model\":\"$MODEL_NAME\",\"base_url\":\"$LLM_ADDR$API_URL_SUFFIX\",\"max_length\":131072,\"tokenizer\":\"$LOCAL_MODEL_PATH\",\"trust_remote_code\":true,\"num_concurrent\":10,\"max_retries\":3,\"timeout\":12000,\"tokenized_requests\":false,\"headers\":{\"Authorization\":\"Bearer $API_KEY\"}}"
+MODEL_ARGS_BASE_2="{\"model\":\"$MODEL_NAME\",\"base_url\":\"$LLM_ADDR$API_URL_SUFFIX\",\"max_length\":192512,\"tokenizer\":\"$LOCAL_MODEL_PATH\",\"trust_remote_code\":true,\"num_concurrent\":10,\"max_retries\":3,\"timeout\":12000,\"tokenized_requests\":false,\"headers\":{\"Authorization\":\"Bearer $API_KEY\"}}"
 
 # 运行单个任务的函数
 run_task_other() {
@@ -130,12 +144,13 @@ run_task_other() {
 	echo "========================================" | tee -a "$LOG_FILE"
 	
 	lm_eval \
-		--model local-completions \
+		--model $API_MODEL \
 		--tasks $task_name \
 		--output_path ${OUTPUT_BASE}/${task_name} \
 		--model_args "$MODEL_ARGS_BASE_1" \
 		--batch_size auto \
 		--gen_kwargs "$GEN_KWARGS" \
+		$CHAT_TEMPLATE_FLAG \
 		$limit_flag \
 		$unsafe_flag 2>&1 | tee -a "$LOG_FILE"
 }
@@ -163,12 +178,13 @@ run_task_ruler() {
 	echo "========================================" | tee -a "$LOG_FILE"
 	
 	lm_eval \
-		--model local-completions \
+		--model $API_MODEL \
 		--tasks $task_name \
 		--output_path ${OUTPUT_BASE}/${task_name} \
 		--model_args "$MODEL_ARGS_BASE_2" \
 		--batch_size auto \
 		--gen_kwargs "$GEN_KWARGS" \
+		$CHAT_TEMPLATE_FLAG \
 		$limit_flag \
 		$unsafe_flag 2>&1 | tee -a "$LOG_FILE"
 }
