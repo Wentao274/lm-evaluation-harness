@@ -65,7 +65,7 @@ def main():
     env["MODEL_NAME"] = args.model
     env["LOCAL_MODEL_PATH"] = args.model_path
     env["OUTPUT_BASE"] = output_dir
-    env["CHAT_APT"] = args.chat_api
+    env["CHAT_API"] = args.chat_api
     if args.limit:
         env["LIMIT"] = args.limit
     env["RULER_LIMIT"] = args.ruler_limit
