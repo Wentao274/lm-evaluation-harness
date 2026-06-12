@@ -15,6 +15,7 @@ pipeline {
         booleanParam(name: 'TASK_RULER', defaultValue: false, description: '运行 ruler 任务')
         string(name: 'LIMIT', defaultValue: '', description: '限制每个任务运行的样本数量 (非必填，为空则不限制，针对除Ruler任务以外的其他任务)')
         string(name: 'RULER_LIMIT', defaultValue: '32', description: '仅针对Ruler任务样本限制 (默认32)')
+        choice(name: 'LMEVAL_LOG_LEVEL', choices: ['INFO', 'DEBUG', 'WARNING', 'ERROR', 'CRITICAL'], description: 'lm-evaluation-harness 日志级别')
         text(name: 'RECIPIENTS', defaultValue: 'liwt@zetyun.com', description: '邮件接收者（逗号分隔）')
         string(name: 'WORK_DIR', defaultValue: '/dingofs/data1/userdata/liwt/maas-image/lm-evaluation-harness', description: '代码仓库目录，请不要改动')
     }
@@ -95,6 +96,7 @@ echo "CHAT_API: ${params.CHAT_API}"
 echo "TASKS: ${env.TASKS}"
 echo "LIMIT: ${params.LIMIT}"
 echo "RULER_LIMIT: ${params.RULER_LIMIT}"
+echo "LMEVAL_LOG_LEVEL: ${params.LMEVAL_LOG_LEVEL}"
 echo "=== 执行Python测试脚本 ==="
 python3 run_eval.py \
     --tester ${params.TESTER} \
@@ -107,7 +109,8 @@ python3 run_eval.py \
     --chat-api "${params.CHAT_API}" \
     --tasks ${env.TASKS} \
     --limit "${params.LIMIT}" \
-    --ruler-limit "${params.RULER_LIMIT}"
+    --ruler-limit "${params.RULER_LIMIT}" \
+    --log-level "${params.LMEVAL_LOG_LEVEL}"
 echo "=== 测试脚本执行结束 ==="
 echo "=== 输出目录 ==="
 find output/${params.TESTER}/${BUILD_NUMBER}/${params.CHIP}/${env.MODEL_DIR}/ -type f

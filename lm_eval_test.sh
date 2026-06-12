@@ -7,6 +7,7 @@ cd ${ROOT_PATH}
 CurDate=$(date +'%Y%m%d%H%M%S')
 
 export HF_ENDPOINT=${HF_ENDPOINT:-https://hf-mirror.com}
+export LMEVAL_LOG_LEVEL=${LMEVAL_LOG_LEVEL:-INFO}
 
 if [ -z "$LLM_ADDR" ]; then
     ADDR=${ADDR:-127.0.0.1}
@@ -150,6 +151,7 @@ run_task_other() {
 		--model_args "$MODEL_ARGS_BASE_1" \
 		--batch_size auto \
 		--gen_kwargs "$GEN_KWARGS" \
+		--log_samples \
 		$CHAT_TEMPLATE_FLAG \
 		$limit_flag \
 		$unsafe_flag 2>&1 | tee -a "$LOG_FILE"
@@ -184,6 +186,7 @@ run_task_ruler() {
 		--model_args "$MODEL_ARGS_BASE_2" \
 		--batch_size auto \
 		--gen_kwargs "$GEN_KWARGS" \
+		--log_samples \
 		$CHAT_TEMPLATE_FLAG \
 		$limit_flag \
 		$unsafe_flag 2>&1 | tee -a "$LOG_FILE"

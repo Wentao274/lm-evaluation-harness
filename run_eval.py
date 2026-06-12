@@ -38,6 +38,12 @@ def parse_args():
         default="32",
         help="Limit number of samples for ruler task (default: 32)",
     )
+    parser.add_argument(
+        "--log-level",
+        default="INFO",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+        help="Logging level for lm-evaluation-harness (default: INFO)",
+    )
     return parser.parse_args()
 
 
@@ -69,6 +75,7 @@ def main():
     if args.limit:
         env["LIMIT"] = args.limit
     env["RULER_LIMIT"] = args.ruler_limit
+    env["LMEVAL_LOG_LEVEL"] = args.log_level
 
     cmd = ["bash", shell_script, args.tasks]
 
