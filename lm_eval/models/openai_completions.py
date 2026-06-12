@@ -216,7 +216,10 @@ class LocalChatCompletion(LocalCompletionsAPI):
             try:
                 tmp = [None] * len(out["choices"])
                 for choices in out["choices"]:
-                    tmp[choices["index"]] = choices["message"]["content"]
+                    content = choices["message"]["content"]
+                    if not content:
+                        content = choices["message"].get("reasoning_content", None)
+                    tmp[choices["index"]] = content
             except Exception as e:
                 # account for cases that generation is blocked by content filter,
                 # which is common for Azure OpenAI Service,
