@@ -197,10 +197,10 @@ for task in "${TASK_LIST[@]}"; do
     task=$(echo "$task" | xargs)
     case "$task" in
         mmlu_pro|gsm_plus)
-            run_task_other "$task" 32768 0.0 false
+            run_task_other "$task" 8192 0.0 false
             ;;
         ruler)
-            run_task_ruler "$task" 32768 0.0 false
+            run_task_ruler "$task" 8192 0.0 false
             ;;
         *)
             echo "Unknown task: $task" | tee -a "$LOG_FILE"
