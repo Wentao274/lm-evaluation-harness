@@ -48,3 +48,6 @@ examples/wandb/
 
 #uv
 uv.lock
+
+# Test results
+output/

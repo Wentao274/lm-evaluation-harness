@@ -208,12 +208,14 @@ find ${localDir}/ -type f
         <div class="content">
             <h3>测试概要</h3>
             <table>
+                <tr><th>项目</th><td>值</td></tr>
                 <tr><th>构建编号</th><td>#${BUILD_NUMBER}</td></tr>
                 <tr><th>测试人员</th><td>${params.TESTER}</td></tr>
                 <tr><th>芯片平台</th><td>${params.CHIP}</td></tr>
                 <tr><th>模型名称</th><td>${params.MODEL}</td></tr>
                 <tr><th>模型路径</th><td>${params.MODEL_PATH}</td></tr>
                 <tr><th>API地址</th><td>${params.BASE_URL}</td></tr>
+                <tr><td>PD分离模式</td><td>${params.PD}</td></tr>
                 <tr><th>接口类型</th><td>${params.CHAT_API}</td></tr>
                 <tr><th>测试任务</th><td>${env.TASKS}</td></tr>
                 <tr><th>样本限制</th><td>${params.LIMIT ?: '无限制'}</td></tr>
