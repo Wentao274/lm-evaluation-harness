@@ -26,7 +26,51 @@ pipeline {
     }
     
     stages {
+        stage('API 连通性预检') {
+            steps {
+                sshagent(credentials: ["${SSH_CREDENTIALS}"]) {
+                    script {
+                        try {
+                            sh """
+ssh -o StrictHostKeyChecking=no ${REMOTE_USER}@${REMOTE_HOST} << 'ENDSSH'
+set -o pipefail
+{
+    echo "=== 检查 API 连通性 (/v1/models) ==="
+    HTTP_CODE=\$(curl -s --connect-timeout 10 -m 30 -o /dev/null -w "%{http_code}" ${params.BASE_URL}/v1/models)
+    if [ "\${HTTP_CODE}" != "200" ]; then
+        echo "ERROR: API 连通性检查失败, HTTP状态码: \${HTTP_CODE}, URL: ${params.BASE_URL}/v1/models"
+        exit 1
+    fi
+    echo "API /v1/models 连通性检查通过, HTTP状态码: \${HTTP_CODE}"
+
+    echo "=== 检查 Chat Completions 接口 ==="
+    CHAT_RESP=\$(curl -s --connect-timeout 10 -m 60 -w "\\n%{http_code}" ${params.BASE_URL}/v1/chat/completions \\
+        -H "Content-Type: application/json" \\
+        -d '{"model":"${params.MODEL}","messages":[{"role":"user","content":"hello"}],"max_tokens":10}')
+    CHAT_HTTP_CODE=\$(echo "\${CHAT_RESP}" | tail -1)
+    if [ "\${CHAT_HTTP_CODE}" != "200" ]; then
+        echo "ERROR: Chat Completions 接口检查失败, HTTP状态码: \${CHAT_HTTP_CODE}"
+        echo "响应内容: \$(echo "\${CHAT_RESP}" | head -n -1)"
+        exit 1
+    fi
+    echo "Chat Completions 接口检查通过, HTTP状态码: \${CHAT_HTTP_CODE}"
+} 2>&1 | tee /tmp/lm_eval_connectivity_${BUILD_NUMBER}.log
+ENDSSH
+"""
+                        } catch (Exception e) {
+                            env.CONNECTIVITY_FAILED = 'true'
+                            currentBuild.result = 'UNSTABLE'
+                            println("=== API 连通性预检失败,后续阶段(环境检查、运行lm-evaluation测试)将跳过 ===")
+                        }
+                    }
+                }
+            }
+        }
+
         stage('环境检查') {
+            when {
+                expression { env.CONNECTIVITY_FAILED != 'true' }
+            }
             steps {
                 sshagent(credentials: ["${SSH_CREDENTIALS}"]) {
                     sh """
@@ -60,6 +104,9 @@ ENDSSH
         }
         
         stage('运行lm-evaluation测试') {
+            when {
+                expression { env.CONNECTIVITY_FAILED != 'true' }
+            }
             steps {
                 script {
                     def taskList = []
@@ -129,15 +176,30 @@ ENDSSH
                         script {
                             def remoteDir = "${params.WORK_DIR}/output/${params.TESTER}/${BUILD_NUMBER}/${params.CHIP}/${env.MODEL_DIR}"
                             def localDir = "reports/${params.TESTER}/${BUILD_NUMBER}/${params.CHIP}"
+                            def localBuildsDir = "builds/${BUILD_NUMBER}"
                             env.RESULT_DIR = "output/${params.TESTER}/${BUILD_NUMBER}/${params.CHIP}/${env.MODEL_DIR}"
                             echo "拉取测试结果目录: ${remoteDir}"
-                            sh """
+
+                            if (env.CONNECTIVITY_FAILED == 'true') {
+                                echo "=== 连通性检查未通过,跳过测试结果目录拉取,仅拉取连通性预检日志 ==="
+                            } else {
+                                sh """
 mkdir -p ${localDir}
 scp -o StrictHostKeyChecking=no \
     -r ${REMOTE_USER}@${REMOTE_HOST}:${remoteDir} \
     ${localDir}/
 echo "=== 拉取结果 ==="
 find ${localDir}/ -type f
+"""
+                            }
+
+                            sh """
+mkdir -p ${localBuildsDir}
+scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+    ${REMOTE_USER}@${REMOTE_HOST}:/tmp/lm_eval_connectivity_${BUILD_NUMBER}.log \
+    ./${localBuildsDir}/lm_eval_connectivity_${BUILD_NUMBER}.log 2>/dev/null \
+    && echo "连通性预检日志已拉取: ${localBuildsDir}/lm_eval_connectivity_${BUILD_NUMBER}.log" \
+    || echo "WARN: 连通性预检日志拉取失败"
 """
                         }
                     }
@@ -158,9 +220,51 @@ find ${localDir}/ -type f
                             logFile = files[0].path
                             logContent = readFile(logFile)
                         }
-                        
+
+                        // 检测连通性预检失败: 优先读取本地已拉取的连通性日志
+                        def connectivityLogPath = "builds/${BUILD_NUMBER}/lm_eval_connectivity_${BUILD_NUMBER}.log"
+                        def connectivityLogContent = ""
+                        def failureReason = ""
+                        def connectivityFailureReason = ""
+                        if (fileExists(connectivityLogPath)) {
+                            connectivityLogContent = readFile(connectivityLogPath)
+                            if (connectivityLogContent.contains("API 连通性检查失败") ||
+                                connectivityLogContent.contains("Chat Completions 接口检查失败")) {
+                                failureReason = "连通性检查未通过"
+                                println("DEBUG: 识别到连通性检查失败, 失败原因: ${failureReason}")
+                                // 提取失败段落: 从 "=== 检查 ..." 段头开始,
+                                // 到下一个 "=== ..." 段头之前结束
+                                def logLines = connectivityLogContent.split('\n')
+                                def collected = []
+                                def inFailureSection = false
+                                for (def ll : logLines) {
+                                    if (ll.contains("检查 API 连通性") || ll.contains("Chat Completions 接口检查")) {
+                                        inFailureSection = true
+                                    }
+                                    if (inFailureSection) {
+                                        if (!collected.isEmpty() && ll.trim().startsWith("===") &&
+                                            !ll.contains("检查 API 连通性") && !ll.contains("Chat Completions 接口检查")) {
+                                            break
+                                        }
+                                        collected.add(ll)
+                                    }
+                                }
+                                connectivityFailureReason = collected.join('\n').trim()
+                            }
+                        } else {
+                            println("DEBUG: 未找到连通性预检日志: ${connectivityLogPath}")
+                        }
+                        // 兜底: 即使日志文件未拉到, 也通过 env 变量判定
+                        if (!failureReason && env.CONNECTIVITY_FAILED == 'true') {
+                            failureReason = "连通性检查未通过"
+                            connectivityFailureReason = "API 连通性或 Chat Completions 接口检查失败,具体日志未拉到,详见 Jenkins 控制台输出。"
+                        }
+
                         def hasResult = logContent.length() > 0
                         def resultStatus = hasResult ? "完成" : "失败/无结果"
+                        if (failureReason) {
+                            resultStatus = "失败/${failureReason}"
+                        }
                         
                         def mmluProTable = extractLmEvalTable(logContent, "mmlu_pro")
                         def gsmPlusTable = extractLmEvalTable(logContent, "gsm_plus")
@@ -171,17 +275,36 @@ find ${localDir}/ -type f
                         def rulerScore = extractMainScore(logContent, "ruler")
                         
                         def taskSummaryRows = ""
-                        if (env.TASKS.contains("mmlu_pro")) {
-                            taskSummaryRows += "<tr><td>mmlu_pro</td><td>${mmluProScore}</td></tr>"
+                        if (failureReason) {
+                            taskSummaryRows = "<tr><td colspan='2'>连通性检查未通过,任务未执行</td></tr>"
+                        } else {
+                            if (env.TASKS?.contains("mmlu_pro")) {
+                                taskSummaryRows += "<tr><td>mmlu_pro</td><td>${mmluProScore}</td></tr>"
+                            }
+                            if (env.TASKS?.contains("gsm_plus")) {
+                                taskSummaryRows += "<tr><td>gsm_plus</td><td>${gsmPlusScore}</td></tr>"
+                            }
+                            if (env.TASKS?.contains("ruler")) {
+                                taskSummaryRows += "<tr><td>ruler</td><td>${rulerScore}</td></tr>"
+                            }
+                            if (taskSummaryRows.isEmpty()) {
+                                taskSummaryRows = "<tr><td colspan='2'>无任务执行</td></tr>"
+                            }
                         }
-                        if (env.TASKS.contains("gsm_plus")) {
-                            taskSummaryRows += "<tr><td>gsm_plus</td><td>${gsmPlusScore}</td></tr>"
-                        }
-                        if (env.TASKS.contains("ruler")) {
-                            taskSummaryRows += "<tr><td>ruler</td><td>${rulerScore}</td></tr>"
-                        }
-                        if (taskSummaryRows.isEmpty()) {
-                            taskSummaryRows = "<tr><td colspan='2'>无任务执行</td></tr>"
+
+                        // 构建连通性检查失败的提示 HTML (HTML 转义)
+                        def connectivityFailureHtml = ""
+                        if (failureReason) {
+                            def escapedReason = (connectivityFailureReason ?: '')
+                                .replace('&', '&amp;')
+                                .replace('<', '&lt;')
+                                .replace('>', '&gt;')
+                            connectivityFailureHtml = """
+            <div style="background-color: #ffebee; color: #000000; border-left: 4px solid #d32f2f; padding: 12px 15px; margin-top: 15px; border-radius: 3px;">
+                <h3 style="color: #d32f2f; margin-top: 0; margin-bottom: 8px;">⚠️ 连通性检查未通过</h3>
+                <p style="margin-top: 0; margin-bottom: 8px; color: #000000;">本次测试未能正常执行用例,原因是 API 连通性检查失败:</p>
+                <pre style="background-color: #ffffff; color: #000000; padding: 10px; border-radius: 3px; overflow-x: auto; white-space: pre-wrap; margin: 0; font-family: Menlo, Consolas, monospace; font-size: 12px;">${escapedReason}</pre>
+            </div>"""
                         }
                         
                         def emailBody = """
@@ -217,14 +340,16 @@ find ${localDir}/ -type f
                 <tr><th>API地址</th><td>${params.BASE_URL}</td></tr>
                 <tr><td>PD分离模式</td><td>${params.PD}</td></tr>
                 <tr><th>接口类型</th><td>${params.CHAT_API}</td></tr>
-                <tr><th>测试任务</th><td>${env.TASKS}</td></tr>
+                <tr><th>测试任务</th><td>${env.TASKS ?: (failureReason ? '未执行(连通性检查未通过)' : 'N/A')}</td></tr>
                 <tr><th>样本限制</th><td>${params.LIMIT ?: '无限制'}</td></tr>
                 <tr><th>Ruler样本限制</th><td>${params.RULER_LIMIT}</td></tr>
                 <tr><th>执行时间</th><td>${currentBuild.durationString}</td></tr>
                 <tr><th>测试状态</th><td>${resultStatus}</td></tr>
                 <tr><th>构建状态</th><td>${currentBuild.currentResult}</td></tr>
             </table>
-            
+
+            ${connectivityFailureHtml}
+
             <h3>任务汇总得分</h3>
             <table>
                 <tr style="background-color: #e3f2fd;"><th>任务名称</th><th>得分</th></tr>
@@ -232,21 +357,21 @@ find ${localDir}/ -type f
             </table>
 """
                         
-                        if (env.TASKS.contains("mmlu_pro") && mmluProTable) {
+                        if (!failureReason && env.TASKS?.contains("mmlu_pro") && mmluProTable) {
                             emailBody += """
             <div class="section-title">MMLU_PRO 任务测试结果</div>
             ${mmluProTable}
 """
                         }
-                        
-                        if (env.TASKS.contains("gsm_plus") && gsmPlusTable) {
+
+                        if (!failureReason && env.TASKS?.contains("gsm_plus") && gsmPlusTable) {
                             emailBody += """
             <div class="section-title">GSM_PLUS 任务测试结果</div>
             ${gsmPlusTable}
 """
                         }
-                        
-                        if (env.TASKS.contains("ruler") && rulerTable) {
+
+                        if (!failureReason && env.TASKS?.contains("ruler") && rulerTable) {
                             emailBody += """
             <div class="section-title">RULER 任务测试结果</div>
             ${rulerTable}
@@ -255,7 +380,7 @@ find ${localDir}/ -type f
                         
                         emailBody += """
             <h3>输出目录</h3>
-            <p>${env.RESULT_DIR ?: 'N/A'}</p>
+            <p>${failureReason ? 'N/A (连通性检查未通过)' : (env.RESULT_DIR ?: 'N/A')}</p>
             
             <p style="margin-top: 20px;">详细日志请查看附件。</p>
             <p>Jenkins 构建地址: <a href="${env.BUILD_URL}">${env.BUILD_URL}</a></p>
@@ -275,7 +400,15 @@ find ${localDir}/ -type f
                         echo "gsm_plus 得分: ${gsmPlusScore}"
                         echo "ruler 得分: ${rulerScore}"
                         
-                        def attachPattern = logFile ? "${logFile}" : ""
+                        def attachPattern = ""
+                        def attachPatterns = []
+                        if (logFile) {
+                            attachPatterns.add(logFile)
+                        }
+                        if (fileExists("builds/${BUILD_NUMBER}/lm_eval_connectivity_${BUILD_NUMBER}.log")) {
+                            attachPatterns.add("builds/${BUILD_NUMBER}/lm_eval_connectivity_${BUILD_NUMBER}.log")
+                        }
+                        attachPattern = attachPatterns.join(',')
                         emailext(
                             subject: "[模型推理 - lm-evaluation精度测试报告] #${BUILD_NUMBER} ${params.CHIP} - ${params.MODEL}",
                             body: emailBody,
@@ -291,7 +424,7 @@ find ${localDir}/ -type f
     post {
         always {
             script {
-                archiveArtifacts artifacts: "reports/${params.TESTER}/${BUILD_NUMBER}/**", allowEmptyArchive: true, fingerprint: true
+                archiveArtifacts artifacts: "reports/${params.TESTER}/${BUILD_NUMBER}/**,builds/${BUILD_NUMBER}/**", allowEmptyArchive: true, fingerprint: true
                 echo "构建完成: ${currentBuild.currentResult}"
             }
         }
