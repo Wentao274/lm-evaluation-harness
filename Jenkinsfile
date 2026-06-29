@@ -1,14 +1,14 @@
 pipeline {
     agent any
     parameters {
-        string(name: 'TESTER', defaultValue: 'liwt', description: '测试人员名称 (必填)')
-        choice(name: 'INFRA', choices: ['vllm', 'sglang'], description: '推理框架')
-        choice(name: 'PD', choices: ['agg', 'disagg'], description: 'PD分离模式,agg 表示非 PD 分离, disagg 表示 PD 分离')
-        string(name: 'CHIP', defaultValue: 'nvidia-h100', description: '芯片平台名称 (必填)')
-        string(name: 'MODEL', defaultValue: 'kimi-k2.5', description: '模型服务名称 (served-model-name, 必填)')
-        string(name: 'MODEL_PATH', defaultValue: '/dingofs/data1/userdata/llms/moonshotai/Kimi-K2.6', description: '模型文件本地路径 (必填，目前仅支持五区的模型路径，请只修改xxx/llms/后的路径名，前面的不要改动)')
-        string(name: 'BASE_URL', defaultValue: 'http://10.201.149.10:8080', description: 'API 地址 (必填，注意没有/v1后缀)')
-        password(name: 'API_KEY', defaultValue: '', description: '模型 API Key (非必填，无认证时留空)')
+        string(name: 'TESTER', defaultValue: 'liwt', description: '测试人员名称（必填）')
+        string(name: 'CHIP', defaultValue: 'nvidia-h100', description: '芯片平台名称（必填）')
+        choice(name: 'ENGINE', choices: ['vllm', 'sglang'], description: '推理框架（必填）')
+        choice(name: 'PD', choices: ['agg', 'disagg'], description: 'PD分离模式（agg表示非PD分离，disagg表示PD分离）')
+        string(name: 'MODEL', defaultValue: 'kimi-k2.5', description: '模型服务名称 (必填)')
+        string(name: 'MODEL_PATH', defaultValue: '/dingofs/data1/userdata/llms/moonshotai/Kimi-K2.6', description: '模型文件本地路径，请使用host绝对路径')
+        string(name: 'BASE_URL', defaultValue: 'http://10.201.149.10:8080', description: 'API 地址（必填）')
+        password(name: 'API_KEY', defaultValue: '', description: 'API Key (可选，无需认证时留空)')
         choice(name: 'CHAT_API', choices: ['OpenAI Completions', 'OpenAI ChatCompletions'], description: '接口类型, OpenAI Completions 使用 /v1/completions, OpenAI ChatCompletions 使用 /v1/chat/completions')
         booleanParam(name: 'TASK_MMLU_PRO', defaultValue: true, description: '运行 mmlu_pro 任务')
         booleanParam(name: 'TASK_GSM_PLUS', defaultValue: true, description: '运行 gsm_plus 任务')
@@ -16,8 +16,8 @@ pipeline {
         string(name: 'LIMIT', defaultValue: '', description: '限制每个任务运行的样本数量 (非必填，为空则不限制，针对除Ruler任务以外的其他任务)')
         string(name: 'RULER_LIMIT', defaultValue: '32', description: '仅针对Ruler任务样本限制 (默认32)')
         choice(name: 'LMEVAL_LOG_LEVEL', choices: ['INFO', 'DEBUG', 'WARNING', 'ERROR', 'CRITICAL'], description: 'lm-evaluation-harness 日志级别')
-        text(name: 'RECIPIENTS', defaultValue: 'liwt@zetyun.com', description: '邮件接收者（逗号分隔）')
-        string(name: 'WORK_DIR', defaultValue: '/dingofs/data1/userdata/liwt/maas-image/lm-evaluation-harness', description: '代码仓库目录，请不要改动')
+        text(name: 'RECIPIENTS', defaultValue: 'liwt@zetyun.com', description: '测试报告邮件接收者（逗号分隔）')
+        string(name: 'WORK_DIR', defaultValue: '/dingofs/data1/userdata/liwt/maas-image/lm-evaluation-harness', description: '测试仓库目录，请不要改动')
     }
     environment {
         SSH_CREDENTIALS = 'HOST_SSH_KEY'
@@ -335,6 +335,7 @@ scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
                 <tr><th>构建编号</th><td>#${BUILD_NUMBER}</td></tr>
                 <tr><th>测试人员</th><td>${params.TESTER}</td></tr>
                 <tr><th>芯片平台</th><td>${params.CHIP}</td></tr>
+                <tr><th>推理框架</th><td>${params.ENGINE}</td></tr>
                 <tr><th>模型名称</th><td>${params.MODEL}</td></tr>
                 <tr><th>模型路径</th><td>${params.MODEL_PATH}</td></tr>
                 <tr><th>API地址</th><td>${params.BASE_URL}</td></tr>
