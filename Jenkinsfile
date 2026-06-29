@@ -80,6 +80,31 @@ cd ${params.WORK_DIR}
 echo "工作目录: \$(pwd)"
 ls -la
 
+echo "=== 清理残留进程 (lm_eval / run_eval) ==="
+RESIDUAL=\$(pgrep -af "lm_eval|run_eval" 2>/dev/null || true)
+if [ -n "\${RESIDUAL}" ]; then
+    echo "发现残留进程:"
+    echo "\${RESIDUAL}"
+    echo "发送 SIGTERM..."
+    echo "\${RESIDUAL}" | awk '{print \$1}' | xargs -r kill -TERM 2>/dev/null || true
+    sleep 3
+    REMAINING=\$(pgrep -af "lm_eval|run_eval" 2>/dev/null || true)
+    if [ -n "\${REMAINING}" ]; then
+        echo "残留进程未响应 SIGTERM,发送 SIGKILL..."
+        echo "\${REMAINING}" | awk '{print \$1}' | xargs -r kill -KILL 2>/dev/null || true
+        sleep 1
+    fi
+    FINAL=\$(pgrep -af "lm_eval|run_eval" 2>/dev/null || true)
+    if [ -n "\${FINAL}" ]; then
+        echo "WARN: 以下残留进程仍存在,需人工介入:"
+        echo "\${FINAL}"
+    else
+        echo "残留进程清理完成"
+    fi
+else
+    echo "未发现残留进程"
+fi
+
 echo "=== 设置权限 ==="
 chmod +x lm_eval_test.sh
 chmod +x run_eval.py
