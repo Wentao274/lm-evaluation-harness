@@ -6,7 +6,7 @@ pipeline {
         choice(name: 'ENGINE', choices: ['vllm', 'sglang'], description: '推理框架（必填）')
         choice(name: 'PD', choices: ['agg', 'disagg'], description: 'PD分离模式（agg表示非PD分离，disagg表示PD分离）')
         string(name: 'MODEL', defaultValue: 'kimi-k2.5', description: '模型服务名称 (必填)')
-        string(name: 'MODEL_PATH', defaultValue: '/dingofs/data1/userdata/llms/moonshotai/Kimi-K2.6', description: '模型文件本地路径，请使用host绝对路径')
+        string(name: 'MODEL_PATH', defaultValue: '/dingofs/data2/userdata/llms/moonshotai/Kimi-K2.6', description: '模型文件本地路径，请使用host绝对路径')
         string(name: 'BASE_URL', defaultValue: 'http://10.201.149.10:8080', description: 'API 地址（必填）')
         password(name: 'API_KEY', defaultValue: '', description: 'API Key (可选，无需认证时留空)')
         choice(name: 'CHAT_API', choices: ['OpenAI Completions', 'OpenAI ChatCompletions'], description: '接口类型, OpenAI Completions 使用 /v1/completions, OpenAI ChatCompletions 使用 /v1/chat/completions')
@@ -17,7 +17,7 @@ pipeline {
         string(name: 'RULER_LIMIT', defaultValue: '32', description: '仅针对Ruler任务样本限制 (默认32)')
         choice(name: 'LMEVAL_LOG_LEVEL', choices: ['INFO', 'DEBUG', 'WARNING', 'ERROR', 'CRITICAL'], description: 'lm-evaluation-harness 日志级别')
         text(name: 'RECIPIENTS', defaultValue: 'liwt@zetyun.com', description: '测试报告邮件接收者（逗号分隔）')
-        string(name: 'WORK_DIR', defaultValue: '/dingofs/data1/userdata/liwt/maas-image/lm-evaluation-harness', description: '测试仓库目录，请不要改动')
+        string(name: 'WORK_DIR', defaultValue: '/dingofs/data2/userdata/liwt/maas-image/lm-evaluation-harness', description: '测试仓库目录，请不要改动')
     }
     environment {
         SSH_CREDENTIALS = 'HOST_SSH_KEY'

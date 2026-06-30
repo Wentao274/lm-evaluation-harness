@@ -17,7 +17,7 @@ fi
 
 API_KEY=${API_KEY:-abc123}
 MODEL_NAME=${MODEL_NAME:-kimi-k2.5}
-LOCAL_MODEL_PATH=${LOCAL_MODEL_PATH:-"/dingofs/data1/userdata/llms/moonshotai/Kimi-K2.6"}
+LOCAL_MODEL_PATH=${LOCAL_MODEL_PATH:-"/dingofs/data2/userdata/llms/moonshotai/Kimi-K2.6"}
 OUTPUT_BASE=${OUTPUT_BASE:-./output_h100}
 LIMIT=${LIMIT:-}
 RULER_LIMIT=${RULER_LIMIT:-32}
