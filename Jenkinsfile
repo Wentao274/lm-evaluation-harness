@@ -26,6 +26,34 @@ pipeline {
     }
     
     stages {
+        stage('打印测试参数') {
+            steps {
+                script {
+                    println("========================================")
+                    println("=== 测试参数信息 ===")
+                    println("========================================")
+                    println("测试人员:        ${params.TESTER}")
+                    println("芯片平台:        ${params.CHIP}")
+                    println("推理框架:        ${params.ENGINE}")
+                    println("PD分离模式:      ${params.PD}")
+                    println("模型服务名称:    ${params.MODEL}")
+                    println("模型路径:        ${params.MODEL_PATH}")
+                    println("BASE_URL:        ${params.BASE_URL}")
+                    println("接口类型:        ${params.CHAT_API}")
+                    println("任务 MMLU_PRO:   ${params.TASK_MMLU_PRO}")
+                    println("任务 GSM_PLUS:   ${params.TASK_GSM_PLUS}")
+                    println("任务 RULER:      ${params.TASK_RULER}")
+                    println("样本限制:        ${params.LIMIT}")
+                    println("Ruler 样本限制:  ${params.RULER_LIMIT}")
+                    println("日志级别:        ${params.LMEVAL_LOG_LEVEL}")
+                    println("邮件接收者:      ${params.RECIPIENTS}")
+                    println("工作目录:        ${params.WORK_DIR}")
+                    println("构建编号:        #${BUILD_NUMBER}")
+                    println("========================================")
+                }
+            }
+        }
+
         stage('API 连通性预检') {
             steps {
                 sshagent(credentials: ["${SSH_CREDENTIALS}"]) {
@@ -165,18 +193,6 @@ export LANG=en_US.UTF-8
 export LC_ALL=en_US.UTF-8
 cd ${params.WORK_DIR}
 source .venv/bin/activate
-echo "=== 参数信息 ==="
-echo "TESTER: ${params.TESTER}"
-echo "BUILD_NUMBER: ${BUILD_NUMBER}"
-echo "CHIP: ${params.CHIP}"
-echo "MODEL: ${params.MODEL}"
-echo "MODEL_PATH: ${params.MODEL_PATH}"
-echo "BASE_URL: ${params.BASE_URL}"
-echo "CHAT_API: ${params.CHAT_API}"
-echo "TASKS: ${env.TASKS}"
-echo "LIMIT: ${params.LIMIT}"
-echo "RULER_LIMIT: ${params.RULER_LIMIT}"
-echo "LMEVAL_LOG_LEVEL: ${params.LMEVAL_LOG_LEVEL}"
 echo "=== 执行Python测试脚本 ==="
 python3 run_eval.py \
     --tester ${params.TESTER} \
