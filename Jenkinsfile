@@ -116,6 +116,14 @@ if [ ! -d "${params.WORK_DIR}/.venv" ]; then
     echo "创建虚拟环境..."
     cd ${params.WORK_DIR}
     uv venv
+    source .venv/bin/activate
+    uv pip install .
+    uv pip install "lm_eval[api]"
+    uv pip install "lm_eval[unsafe_code]"
+    uv pip install "lm_eval[ruler]"
+    uv pip install "lm_eval[sglang]"
+    uv pip install "lm_eval[vllm]"
+    deactivate
     unset https_proxy
     unset http_proxy
 fi
