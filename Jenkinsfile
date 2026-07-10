@@ -1,5 +1,7 @@
 pipeline {
-    agent any
+    agent {
+        label 'slave-2'
+    }
     parameters {
         string(name: 'TESTER', defaultValue: 'liwt', description: '测试人员名称（必填）')
         string(name: 'CHIP', defaultValue: 'nvidia-h100', description: '芯片平台名称（必填）')
@@ -9,7 +11,7 @@ pipeline {
         string(name: 'MODEL_PATH', defaultValue: '/dingofs/data2/userdata/llms/moonshotai/Kimi-K2.6', description: '模型文件本地路径，请使用host绝对路径')
         string(name: 'BASE_URL', defaultValue: 'http://10.201.149.10:8080', description: 'API 地址（必填）')
         password(name: 'API_KEY', defaultValue: '', description: 'API Key (可选，无需认证时留空)')
-        choice(name: 'CHAT_API', choices: ['OpenAI Completions', 'OpenAI ChatCompletions'], description: '接口类型, OpenAI Completions 使用 /v1/completions, OpenAI ChatCompletions 使用 /v1/chat/completions')
+        choice(name: 'CHAT_API', choices: ['OpenAI ChatCompletions', 'OpenAI Completions'], description: '接口类型, OpenAI Completions 使用 /v1/completions, OpenAI ChatCompletions 使用 /v1/chat/completions')
         booleanParam(name: 'TASK_MMLU_PRO', defaultValue: true, description: '运行 mmlu_pro 任务')
         booleanParam(name: 'TASK_GSM_PLUS', defaultValue: true, description: '运行 gsm_plus 任务')
         booleanParam(name: 'TASK_RULER', defaultValue: false, description: '运行 ruler 任务')
@@ -18,6 +20,7 @@ pipeline {
         choice(name: 'LMEVAL_LOG_LEVEL', choices: ['INFO', 'DEBUG', 'WARNING', 'ERROR', 'CRITICAL'], description: 'lm-evaluation-harness 日志级别')
         text(name: 'RECIPIENTS', defaultValue: 'liwt@zetyun.com', description: '测试报告邮件接收者（逗号分隔）')
         string(name: 'WORK_DIR', defaultValue: '/dingofs/data2/userdata/liwt/maas-image/lm-evaluation-harness', description: '测试仓库目录，请不要改动')
+        string(name: 'SERVE_DESC', defaultValue: '', description: '模型服务的描述信息')
     }
     environment {
         SSH_CREDENTIALS = 'HOST_SSH_KEY'
@@ -382,6 +385,7 @@ scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
             <table>
                 <tr><th>项目</th><td>值</td></tr>
                 <tr><th>构建编号</th><td>#${BUILD_NUMBER}</td></tr>
+                <tr><th>模型服务描述</th><td>${params.SERVE_DESC}</td></tr>
                 <tr><th>测试人员</th><td>${params.TESTER}</td></tr>
                 <tr><th>芯片平台</th><td>${params.CHIP}</td></tr>
                 <tr><th>推理框架</th><td>${params.ENGINE}</td></tr>
