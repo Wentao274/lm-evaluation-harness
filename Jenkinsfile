@@ -393,7 +393,7 @@ scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
                 <tr><th>模型名称</th><td>${params.MODEL}</td></tr>
                 <tr><th>模型路径</th><td>${params.MODEL_PATH}</td></tr>
                 <tr><th>API地址</th><td>${params.BASE_URL}</td></tr>
-                <tr><td>PD分离模式</td><td>${params.PD}</td></tr>
+                <tr><th>PD分离模式</th><td>${params.PD}</td></tr>
                 <tr><th>接口类型</th><td>${params.CHAT_API}</td></tr>
                 <tr><th>测试任务</th><td>${env.TASKS ?: (failureReason ? '未执行(连通性检查未通过)' : 'N/A')}</td></tr>
                 <tr><th>样本限制</th><td>${params.LIMIT ?: '无限制'}</td></tr>
