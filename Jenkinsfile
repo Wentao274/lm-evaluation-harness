@@ -18,9 +18,9 @@ pipeline {
         string(name: 'LIMIT', defaultValue: '', description: '限制每个任务运行的样本数量 (非必填，为空则不限制，针对除Ruler任务以外的其他任务)')
         string(name: 'RULER_LIMIT', defaultValue: '32', description: '仅针对Ruler任务样本限制 (默认32)')
         choice(name: 'LMEVAL_LOG_LEVEL', choices: ['INFO', 'DEBUG', 'WARNING', 'ERROR', 'CRITICAL'], description: 'lm-evaluation-harness 日志级别')
+        string(name: 'DESCRIPTION', defaultValue: '', description: '模型服务的描述信息')
         text(name: 'RECIPIENTS', defaultValue: 'liwt@zetyun.com', description: '测试报告邮件接收者（逗号分隔）')
         string(name: 'WORK_DIR', defaultValue: '/dingofs/data2/userdata/liwt/maas-image/lm-evaluation-harness', description: '测试仓库目录，请不要改动')
-        string(name: 'SERVE_DESC', defaultValue: '', description: '模型服务的描述信息')
     }
     environment {
         SSH_CREDENTIALS = 'HOST_SSH_KEY'
@@ -49,6 +49,7 @@ pipeline {
                     println("样本限制:        ${params.LIMIT}")
                     println("Ruler 样本限制:  ${params.RULER_LIMIT}")
                     println("日志级别:        ${params.LMEVAL_LOG_LEVEL}")
+                    println("模型描述:        ${params.DESCRIPTION}")
                     println("邮件接收者:      ${params.RECIPIENTS}")
                     println("工作目录:        ${params.WORK_DIR}")
                     println("构建编号:        #${BUILD_NUMBER}")
@@ -385,7 +386,7 @@ scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
             <table>
                 <tr><th>项目</th><td>值</td></tr>
                 <tr><th>构建编号</th><td>#${BUILD_NUMBER}</td></tr>
-                <tr><th>模型服务描述</th><td>${params.SERVE_DESC}</td></tr>
+                <tr><th>模型服务描述</th><td>${params.DESCRIPTION}</td></tr>
                 <tr><th>测试人员</th><td>${params.TESTER}</td></tr>
                 <tr><th>芯片平台</th><td>${params.CHIP}</td></tr>
                 <tr><th>推理框架</th><td>${params.ENGINE}</td></tr>
