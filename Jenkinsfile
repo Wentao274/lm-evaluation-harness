@@ -14,7 +14,7 @@ pipeline {
         choice(name: 'CHAT_API', choices: ['OpenAI ChatCompletions', 'OpenAI Completions'], description: '接口类型, OpenAI Completions 使用 /v1/completions, OpenAI ChatCompletions 使用 /v1/chat/completions')
         booleanParam(name: 'TASK_MMLU_PRO', defaultValue: true, description: '运行 mmlu_pro 任务')
         booleanParam(name: 'TASK_GSM_PLUS', defaultValue: true, description: '运行 gsm_plus 任务')
-        booleanParam(name: 'TASK_RULER', defaultValue: false, description: '运行 ruler 任务')
+        booleanParam(name: 'TASK_RULER', defaultValue: true, description: '运行 ruler 任务')
         string(name: 'LIMIT', defaultValue: '', description: '限制每个任务运行的样本数量 (非必填，为空则不限制，针对除Ruler任务以外的其他任务)')
         string(name: 'RULER_LIMIT', defaultValue: '32', description: '仅针对Ruler任务样本限制 (默认32)')
         choice(name: 'LMEVAL_LOG_LEVEL', choices: ['INFO', 'DEBUG', 'WARNING', 'ERROR', 'CRITICAL'], description: 'lm-evaluation-harness 日志级别')
