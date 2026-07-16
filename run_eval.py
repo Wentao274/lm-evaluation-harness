@@ -28,7 +28,8 @@ def parse_args():
     parser.add_argument(
         "--tasks",
         default="mmlu_pro",
-        help="Tasks to run, comma-separated (default: mmlu_pro)",
+        help="Tasks to run, comma-separated (default: mmlu_pro). "
+        "Supported: mmlu_pro, gsm_plus, humaneval, ruler",
     )
     parser.add_argument(
         "--limit", default="", help="Limit number of samples per task (optional)"

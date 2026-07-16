@@ -20,7 +20,7 @@ uv venv
 source .venv/bin/activate
 
 # 安装依赖
-uv pip install "lm_eval[vllm]"
+uv pip install "lm_eval[hf]"
 uv pip install "lm_eval[api]"
 uv pip install "lm_eval[ruler]"
 

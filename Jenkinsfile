@@ -14,6 +14,7 @@ pipeline {
         choice(name: 'CHAT_API', choices: ['OpenAI ChatCompletions', 'OpenAI Completions'], description: '接口类型, OpenAI Completions 使用 /v1/completions, OpenAI ChatCompletions 使用 /v1/chat/completions')
         booleanParam(name: 'TASK_MMLU_PRO', defaultValue: true, description: '运行 mmlu_pro 任务')
         booleanParam(name: 'TASK_GSM_PLUS', defaultValue: true, description: '运行 gsm_plus 任务')
+        booleanParam(name: 'TASK_HUMANEVAL', defaultValue: true, description: '运行 humaneval 任务')
         booleanParam(name: 'TASK_RULER', defaultValue: true, description: '运行 ruler 任务')
         string(name: 'LIMIT', defaultValue: '', description: '限制每个任务运行的样本数量 (非必填，为空则不限制，针对除Ruler任务以外的其他任务)')
         string(name: 'RULER_LIMIT', defaultValue: '32', description: '仅针对Ruler任务样本限制 (默认32)')
@@ -45,6 +46,7 @@ pipeline {
                     println("接口类型:        ${params.CHAT_API}")
                     println("任务 MMLU_PRO:   ${params.TASK_MMLU_PRO}")
                     println("任务 GSM_PLUS:   ${params.TASK_GSM_PLUS}")
+                    println("任务 HUMANEVAL:  ${params.TASK_HUMANEVAL}")
                     println("任务 RULER:      ${params.TASK_RULER}")
                     println("样本限制:        ${params.LIMIT}")
                     println("Ruler 样本限制:  ${params.RULER_LIMIT}")
@@ -154,7 +156,7 @@ if [ ! -d "${params.WORK_DIR}/.venv" ]; then
     uv pip install "lm_eval[unsafe_code]"
     uv pip install "lm_eval[ruler]"
     uv pip install "lm_eval[sglang]"
-    uv pip install "lm_eval[vllm]"
+    uv pip install "lm_eval[hf]"
     deactivate
     unset https_proxy
     unset http_proxy
@@ -177,6 +179,7 @@ ENDSSH
                     def taskList = []
                     if (params.TASK_MMLU_PRO) taskList.add('mmlu_pro')
                     if (params.TASK_GSM_PLUS) taskList.add('gsm_plus')
+                    if (params.TASK_HUMANEVAL) taskList.add('humaneval')
                     if (params.TASK_RULER) taskList.add('ruler')
                     if (taskList.isEmpty()) {
                         error '至少需要选择一个测试任务'
@@ -321,10 +324,12 @@ scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
                         
                         def mmluProTable = extractLmEvalTable(logContent, "mmlu_pro")
                         def gsmPlusTable = extractLmEvalTable(logContent, "gsm_plus")
+                        def humanevalTable = extractLmEvalTable(logContent, "humaneval")
                         def rulerTable = extractLmEvalTable(logContent, "ruler")
                         
                         def mmluProScore = extractMainScore(logContent, "mmlu_pro")
                         def gsmPlusScore = extractMainScore(logContent, "gsm_plus")
+                        def humanevalScore = extractMainScore(logContent, "humaneval")
                         def rulerScore = extractMainScore(logContent, "ruler")
                         
                         def taskSummaryRows = ""
@@ -336,6 +341,9 @@ scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
                             }
                             if (env.TASKS?.contains("gsm_plus")) {
                                 taskSummaryRows += "<tr><td>gsm_plus</td><td>${gsmPlusScore}</td></tr>"
+                            }
+                            if (env.TASKS?.contains("humaneval")) {
+                                taskSummaryRows += "<tr><td>humaneval</td><td>${humanevalScore}</td></tr>"
                             }
                             if (env.TASKS?.contains("ruler")) {
                                 taskSummaryRows += "<tr><td>ruler</td><td>${rulerScore}</td></tr>"
@@ -426,6 +434,13 @@ scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
 """
                         }
 
+                        if (!failureReason && env.TASKS?.contains("humaneval") && humanevalTable) {
+                            emailBody += """
+            <div class="section-title">HUMANEVAL 任务测试结果</div>
+            ${humanevalTable}
+"""
+                        }
+
                         if (!failureReason && env.TASKS?.contains("ruler") && rulerTable) {
                             emailBody += """
             <div class="section-title">RULER 任务测试结果</div>
@@ -453,6 +468,7 @@ scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
                         echo "测试状态: ${resultStatus}"
                         echo "mmlu_pro 得分: ${mmluProScore}"
                         echo "gsm_plus 得分: ${gsmPlusScore}"
+                        echo "humaneval 得分: ${humanevalScore}"
                         echo "ruler 得分: ${rulerScore}"
                         
                         def attachPattern = ""
@@ -641,6 +657,18 @@ def extractMainScore(String content, String tName) {
             if (!line.contains("strict-match")) continue
             def row = parsePipeRow(line)
             if (row != null && row.value != "" && row.value != "N/A") {
+                return row.value
+            }
+        }
+    }
+
+    if (tName == "humaneval") {
+        for (int i = 0; i < lines.size(); i++) {
+            def line = lines[i].trim()
+            if (!line.startsWith("|")) continue
+            if (!line.contains("pass@1")) continue
+            def row = parsePipeRow(line)
+            if (row != null && row.name == "humaneval" && row.value != "" && row.value != "N/A") {
                 return row.value
             }
         }

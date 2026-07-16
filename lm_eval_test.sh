@@ -44,11 +44,12 @@ usage() {
     echo "  -d, --model-path PATH  Local model path"
     echo "  -h, --help             Show this help message"
     echo "TASK:"
-    echo "  Task name(s) to run, comma-separated (e.g., mmlu_pro or mmlu_pro,gsm_plus,ruler)"
+    echo "  Task name(s) to run, comma-separated (e.g., mmlu_pro or mmlu_pro,gsm_plus,humaneval,ruler)"
     echo ""
     echo "Supported tasks:"
     echo "  - mmlu_pro, gsm_plus: run with run_task_other"
-    echo "  - ruler: run with run_task_ruler"
+    echo "  - humaneval: run with run_task_humaneval"
+    echo "  - ruler: run with run_task_ruler (last)"
     exit 1
 }
 
@@ -118,8 +119,9 @@ echo "  RULER_LIMIT: $RULER_LIMIT" | tee -a "$LOG_FILE"
 echo "========================================" | tee -a "$LOG_FILE"
 
 # model_args 构造
-MODEL_ARGS_BASE_1="{\"model\":\"$MODEL_NAME\",\"base_url\":\"$LLM_ADDR$API_URL_SUFFIX\",\"max_length\":131072,\"tokenizer\":\"$LOCAL_MODEL_PATH\",\"trust_remote_code\":true,\"num_concurrent\":10,\"max_retries\":3,\"timeout\":1200,\"tokenized_requests\":false,\"headers\":{\"Authorization\":\"Bearer $API_KEY\"}}"
-MODEL_ARGS_BASE_2="{\"model\":\"$MODEL_NAME\",\"base_url\":\"$LLM_ADDR$API_URL_SUFFIX\",\"max_length\":162816,\"tokenizer\":\"$LOCAL_MODEL_PATH\",\"trust_remote_code\":true,\"num_concurrent\":10,\"max_retries\":3,\"timeout\":1200,\"tokenized_requests\":false,\"headers\":{\"Authorization\":\"Bearer $API_KEY\"}}"
+MODEL_ARGS_BASE_OTHER="{\"model\":\"$MODEL_NAME\",\"base_url\":\"$LLM_ADDR$API_URL_SUFFIX\",\"max_length\":131072,\"tokenizer\":\"$LOCAL_MODEL_PATH\",\"trust_remote_code\":true,\"num_concurrent\":10,\"max_retries\":3,\"timeout\":1200,\"tokenized_requests\":false,\"headers\":{\"Authorization\":\"Bearer $API_KEY\"}}"
+MODEL_ARGS_BASE_HUMANEVAL="{\"model\":\"$MODEL_NAME\",\"base_url\":\"$LLM_ADDR/v1/completions\",\"max_length\":16384,\"tokenizer\":\"$LOCAL_MODEL_PATH\",\"trust_remote_code\":true,\"num_concurrent\":1,\"max_retries\":3,\"timeout\":120,\"tokenized_requests\":false,\"headers\":{\"Authorization\":\"Bearer $API_KEY\"}}"
+MODEL_ARGS_BASE_RULER="{\"model\":\"$MODEL_NAME\",\"base_url\":\"$LLM_ADDR$API_URL_SUFFIX\",\"max_length\":162816,\"tokenizer\":\"$LOCAL_MODEL_PATH\",\"trust_remote_code\":true,\"num_concurrent\":10,\"max_retries\":3,\"timeout\":1200,\"tokenized_requests\":false,\"headers\":{\"Authorization\":\"Bearer $API_KEY\"}}"
 
 # 运行单个任务的函数
 run_task_other() {
@@ -127,9 +129,10 @@ run_task_other() {
 	local max_tokens=$2
 	local temperature=$3
 	local unsafe_code=$4
+	local num_fewshot=$5
 	
 	local do_sample="false"
-	[ "$temperature" = "1.0" ] && do_sample="true"
+	if awk -v t="$temperature" 'BEGIN{exit !(t > 0.0)}'; then do_sample="true"; fi
 
 	GEN_KWARGS="{\"max_gen_toks\":$max_tokens,\"do_sample\":$do_sample,\"temperature\":$temperature,\"top_p\":0.95,\"top_k\":40}"
 
@@ -148,13 +151,53 @@ run_task_other() {
 		--model $API_MODEL \
 		--tasks $task_name \
 		--output_path ${OUTPUT_BASE}/${task_name} \
-		--model_args "$MODEL_ARGS_BASE_1" \
+		--model_args "$MODEL_ARGS_BASE_OTHER" \
 		--batch_size auto \
 		--gen_kwargs "$GEN_KWARGS" \
+		--num_fewshot $num_fewshot \
 		--log_samples \
 		$CHAT_TEMPLATE_FLAG \
 		$limit_flag \
 		$unsafe_flag 2>&1 | tee -a "$LOG_FILE"
+}
+
+
+run_task_humaneval() {
+	local task_name=$1
+	local max_tokens=$2
+	local temperature=$3
+	local unsafe_code=$4
+	local num_fewshot=$5
+	
+	local do_sample="false"
+	if awk -v t="$temperature" 'BEGIN{exit !(t > 0.0)}'; then do_sample="true"; fi
+
+	GEN_KWARGS="{\"max_gen_toks\":$max_tokens,\"do_sample\":$do_sample,\"temperature\":$temperature}"
+
+	local unsafe_flag=""
+	[ "$unsafe_code" = "true" ] && unsafe_flag="--confirm_run_unsafe_code" && export HF_ALLOW_CODE_EVAL=1
+	
+	local limit_flag=""
+	[ -n "$LIMIT" ] && limit_flag="--limit $LIMIT"
+	
+	echo "" | tee -a "$LOG_FILE"
+	echo "========================================" | tee -a "$LOG_FILE"
+	echo "Running Task: $task_name" | tee -a "$LOG_FILE"
+	echo "========================================" | tee -a "$LOG_FILE"
+	
+	lm_eval \
+		--model local-completions \
+		--tasks $task_name \
+		--output_path ${OUTPUT_BASE}/${task_name} \
+		--model_args "$MODEL_ARGS_BASE_HUMANEVAL" \
+		--batch_size auto \
+		--gen_kwargs "$GEN_KWARGS" \
+		--num_fewshot $num_fewshot \
+		--log_samples \
+		$limit_flag \
+		$unsafe_flag 2>&1 | tee -a "$LOG_FILE"
+	
+	unset HF_ALLOW_CODE_EVAL
 }
 
 
@@ -163,9 +206,10 @@ run_task_ruler() {
 	local max_tokens=$2
 	local temperature=$3
 	local unsafe_code=$4
+	local num_fewshot=$5
 	
 	local do_sample="false"
-	[ "$temperature" = "1.0" ] && do_sample="true"
+	if awk -v t="$temperature" 'BEGIN{exit !(t > 0.0)}'; then do_sample="true"; fi
 
 	GEN_KWARGS="{\"max_gen_toks\":$max_tokens,\"do_sample\":$do_sample,\"temperature\":$temperature,\"top_p\":0.95,\"top_k\":40}"
 
@@ -183,9 +227,10 @@ run_task_ruler() {
 		--model $API_MODEL \
 		--tasks $task_name \
 		--output_path ${OUTPUT_BASE}/${task_name} \
-		--model_args "$MODEL_ARGS_BASE_2" \
+		--model_args "$MODEL_ARGS_BASE_RULER" \
 		--batch_size auto \
 		--gen_kwargs "$GEN_KWARGS" \
+		--num_fewshot $num_fewshot \
 		--log_samples \
 		$CHAT_TEMPLATE_FLAG \
 		$limit_flag \
@@ -196,11 +241,17 @@ IFS=',' read -ra TASK_LIST <<< "$TASKS"
 for task in "${TASK_LIST[@]}"; do
     task=$(echo "$task" | xargs)
     case "$task" in
-        mmlu_pro|gsm_plus)
-            run_task_other "$task" 8192 0.0 false
+        mmlu_pro)
+            run_task_other "$task" 8192 0.0 false 5
+            ;;
+        gsm_plus)
+            run_task_other "$task" 8192 0.0 false 8
+            ;;
+        humaneval)
+            run_task_humaneval "$task" 4096 0.0 true 0
             ;;
         ruler)
-            run_task_ruler "$task" 8192 0.0 false
+            run_task_ruler "$task" 8192 0.0 false 0
             ;;
         *)
             echo "Unknown task: $task" | tee -a "$LOG_FILE"
