@@ -7,6 +7,7 @@ venv/
 ENV/
 env/
 *.env
+nul
 
 # Python bytecode and build artifacts
 __pycache__/
@@ -34,6 +35,9 @@ test_logs/
 # Caching
 lm_eval/caching/.cache
 lm_cache/
+
+# Ruff stuff:
+.ruff_cache/
 
 # Logging
 *.log
