@@ -119,9 +119,9 @@ echo "  RULER_LIMIT: $RULER_LIMIT" | tee -a "$LOG_FILE"
 echo "========================================" | tee -a "$LOG_FILE"
 
 # model_args 构造
-MODEL_ARGS_BASE_OTHER="{\"model\":\"$MODEL_NAME\",\"base_url\":\"$LLM_ADDR$API_URL_SUFFIX\",\"max_length\":131072,\"tokenizer\":\"$LOCAL_MODEL_PATH\",\"trust_remote_code\":true,\"num_concurrent\":10,\"max_retries\":3,\"timeout\":1200,\"tokenized_requests\":false,\"headers\":{\"Authorization\":\"Bearer $API_KEY\"}}"
+MODEL_ARGS_BASE_OTHER="{\"model\":\"$MODEL_NAME\",\"base_url\":\"$LLM_ADDR$API_URL_SUFFIX\",\"max_length\":32768,\"tokenizer\":\"$LOCAL_MODEL_PATH\",\"trust_remote_code\":true,\"num_concurrent\":10,\"max_retries\":3,\"timeout\":1200,\"tokenized_requests\":false,\"headers\":{\"Authorization\":\"Bearer $API_KEY\"}}"
 MODEL_ARGS_BASE_HUMANEVAL="{\"model\":\"$MODEL_NAME\",\"base_url\":\"$LLM_ADDR/v1/completions\",\"max_length\":16384,\"tokenizer\":\"$LOCAL_MODEL_PATH\",\"trust_remote_code\":true,\"num_concurrent\":1,\"max_retries\":3,\"timeout\":120,\"tokenized_requests\":false,\"headers\":{\"Authorization\":\"Bearer $API_KEY\"}}"
-MODEL_ARGS_BASE_RULER="{\"model\":\"$MODEL_NAME\",\"base_url\":\"$LLM_ADDR$API_URL_SUFFIX\",\"max_length\":162816,\"tokenizer\":\"$LOCAL_MODEL_PATH\",\"trust_remote_code\":true,\"num_concurrent\":10,\"max_retries\":3,\"timeout\":1200,\"tokenized_requests\":false,\"headers\":{\"Authorization\":\"Bearer $API_KEY\"}}"
+MODEL_ARGS_BASE_RULER="{\"model\":\"$MODEL_NAME\",\"base_url\":\"$LLM_ADDR$API_URL_SUFFIX\",\"max_length\":137216,\"tokenizer\":\"$LOCAL_MODEL_PATH\",\"trust_remote_code\":true,\"num_concurrent\":10,\"max_retries\":3,\"timeout\":1200,\"tokenized_requests\":false,\"headers\":{\"Authorization\":\"Bearer $API_KEY\"}}"
 
 # 运行单个任务的函数
 run_task_other() {
@@ -242,16 +242,16 @@ for task in "${TASK_LIST[@]}"; do
     task=$(echo "$task" | xargs)
     case "$task" in
         mmlu_pro)
-            run_task_other "$task" 8192 0.0 false 5
+            run_task_other "$task" 2048 0.0 false 5
             ;;
         gsm_plus)
-            run_task_other "$task" 8192 0.0 false 8
+            run_task_other "$task" 2048 0.0 false 8
             ;;
         humaneval)
             run_task_humaneval "$task" 4096 0.0 true 0
             ;;
         ruler)
-            run_task_ruler "$task" 8192 0.0 false 0
+            run_task_ruler "$task" 4096 0.0 false 0
             ;;
         *)
             echo "Unknown task: $task" | tee -a "$LOG_FILE"
