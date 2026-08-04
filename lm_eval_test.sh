@@ -120,7 +120,7 @@ echo "========================================" | tee -a "$LOG_FILE"
 
 # model_args 构造
 MODEL_ARGS_BASE_OTHER="{\"model\":\"$MODEL_NAME\",\"base_url\":\"$LLM_ADDR$API_URL_SUFFIX\",\"max_length\":32768,\"tokenizer\":\"$LOCAL_MODEL_PATH\",\"trust_remote_code\":true,\"num_concurrent\":10,\"max_retries\":3,\"timeout\":1200,\"tokenized_requests\":false,\"headers\":{\"Authorization\":\"Bearer $API_KEY\"}}"
-MODEL_ARGS_BASE_HUMANEVAL="{\"model\":\"$MODEL_NAME\",\"base_url\":\"$LLM_ADDR/v1/completions\",\"max_length\":16384,\"tokenizer\":\"$LOCAL_MODEL_PATH\",\"trust_remote_code\":true,\"num_concurrent\":1,\"max_retries\":3,\"timeout\":120,\"tokenized_requests\":false,\"headers\":{\"Authorization\":\"Bearer $API_KEY\"}}"
+MODEL_ARGS_BASE_HUMANEVAL="{\"model\":\"$MODEL_NAME\",\"base_url\":\"$LLM_ADDR$API_URL_SUFFIX\",\"max_length\":16384,\"tokenizer\":\"$LOCAL_MODEL_PATH\",\"trust_remote_code\":true,\"num_concurrent\":1,\"max_retries\":3,\"timeout\":120,\"tokenized_requests\":false,\"headers\":{\"Authorization\":\"Bearer $API_KEY\"}}"
 MODEL_ARGS_BASE_RULER="{\"model\":\"$MODEL_NAME\",\"base_url\":\"$LLM_ADDR$API_URL_SUFFIX\",\"max_length\":137216,\"tokenizer\":\"$LOCAL_MODEL_PATH\",\"trust_remote_code\":true,\"num_concurrent\":10,\"max_retries\":3,\"timeout\":1200,\"tokenized_requests\":false,\"headers\":{\"Authorization\":\"Bearer $API_KEY\"}}"
 
 # 运行单个任务的函数
@@ -186,7 +186,7 @@ run_task_humaneval() {
 	echo "========================================" | tee -a "$LOG_FILE"
 	
 	lm_eval \
-		--model local-completions \
+		--model $API_MODEL \
 		--tasks $task_name \
 		--output_path ${OUTPUT_BASE}/${task_name} \
 		--model_args "$MODEL_ARGS_BASE_HUMANEVAL" \
@@ -194,6 +194,7 @@ run_task_humaneval() {
 		--gen_kwargs "$GEN_KWARGS" \
 		--num_fewshot $num_fewshot \
 		--log_samples \
+		$CHAT_TEMPLATE_FLAG \
 		$limit_flag \
 		$unsafe_flag 2>&1 | tee -a "$LOG_FILE"
 	
