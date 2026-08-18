@@ -145,8 +145,8 @@ chmod +x run_eval.py
 
 echo "=== 检查并创建虚拟环境 ==="
 if [ ! -d "${params.WORK_DIR}/.venv" ]; then
-    export https_proxy=http://100.64.1.68:1080
-    export http_proxy=http://100.64.1.68:1080
+    export https_proxy=http://10.201.136.68:1080
+    export http_proxy=http://10.201.136.68:1080
     echo "创建虚拟环境..."
     cd ${params.WORK_DIR}
     uv venv
