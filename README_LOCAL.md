@@ -6,10 +6,10 @@
 
 | 任务        | 说明                  | 运行函数             | max_gen_toks | temperature | unsafe_code | num_fewshot |
 | ----------- | --------------------- | -------------------- | ------------ | ----------- | ----------- | ----------- |
-| `mmlu_pro`  | 综合知识问答          | `run_task_other`     | 8192         | 0.0         | false       | 5           |
-| `gsm_plus`  | 数学推理              | `run_task_other`     | 8192         | 0.0         | false       | 8           |
+| `mmlu_pro`  | 综合知识问答          | `run_task_other`     | 2048         | 0.0         | false       | 5           |
+| `gsm_plus`  | 数学推理              | `run_task_other`     | 2048         | 0.0         | false       | 8           |
 | `humaneval` | 代码生成（含不安全码）| `run_task_humaneval` | 4096         | 0.0         | true        | 0           |
-| `ruler`     | 长上下文检索          | `run_task_ruler`     | 8192         | 0.0         | false       | 0           |
+| `ruler`     | 长上下文检索          | `run_task_ruler`     | 4096         | 0.0         | false       | 0           |
 
 ---
 
@@ -202,7 +202,7 @@ python3 run_eval.py \
 
 ### 脚本内部执行流程
 
-1. **解析参数并构造 model_args**：根据 `CHAT_API` 选择 `/v1/completions` 或 `/v1/chat/completions` 接口，并为不同任务生成对应的 `model_args`（humaneval 使用 `local-completions` 且 `num_concurrent=1`）。
+1. **解析参数并构造 model_args**：根据 `CHAT_API` 选择 `local-completions`（`/v1/completions`）或 `local-chat-completions`（`/v1/chat/completions`）接口（所有任务共用），并为不同任务生成对应的 `model_args`：other（mmlu_pro/gsm_plus）`max_length=32768`，humaneval `max_length=16384`，ruler `max_length=137216`，均 `num_concurrent=10`、`max_retries=3`、`timeout=1200`。`gen_kwargs` 中 other 与 ruler 包含 `top_p=0.95`、`top_k=40`，humaneval 不包含。`batch_size`：other 与 humaneval 为 32，ruler 为 1。
 2. **生成日志文件**：`$OUTPUT_BASE/lm-eval-<tasks>.log`，所有输出同时写入终端与日志。
 3. **按任务顺序执行**：依次调用 `lm_eval` CLI，结果输出到 `$OUTPUT_BASE/<task_name>/`。
 4. **ruler 任务**固定使用 `--limit $RULER_LIMIT`，其他任务在 `LIMIT` 非空时启用 `--limit`。
@@ -321,4 +321,4 @@ lm-evaluation-harness 的 Jenkins 测试流水线：
 2. **模型路径**：`LOCAL_MODEL_PATH` / `MODEL_PATH` 仅用于加载 tokenizer，不会加载模型权重，确保该路径下包含正确的 tokenizer 配置文件。
 3. **humaneval 安全码**：该任务需执行模型生成的代码，脚本会自动设置 `HF_ALLOW_CODE_EVAL=1`，请在可信环境中运行。
 4. **离线环境**：若网络受限，请提前完成离线数据集复制（见「环境准备」），并可设置 `HF_HUB_OFFLINE=1`、`TRANSFORMERS_OFFLINE=1`。
-5. **超时与重试**：model_args 中默认配置 `num_concurrent=10`、`max_retries=3`、`timeout=1200`（humaneval 为 `num_concurrent=1`、`timeout=120`）。如遇大量超时，可适当增大 timeout 或降低并发数。
+5. **超时与重试**：model_args 中默认配置 `num_concurrent=10`、`max_retries=3`、`timeout=1200`（所有任务一致）。如遇大量超时，可适当增大 timeout 或降低并发数。
