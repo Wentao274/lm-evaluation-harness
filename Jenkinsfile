@@ -16,8 +16,14 @@ pipeline {
         booleanParam(name: 'TASK_GSM_PLUS', defaultValue: true, description: '运行 gsm_plus 任务')
         booleanParam(name: 'TASK_HUMANEVAL', defaultValue: true, description: '运行 humaneval 任务')
         booleanParam(name: 'TASK_RULER', defaultValue: true, description: '运行 ruler 任务')
-        string(name: 'LIMIT', defaultValue: '', description: '限制每个任务运行的样本数量 (非必填，为空则不限制，针对除Ruler任务以外的其他任务)')
-        string(name: 'RULER_LIMIT', defaultValue: '32', description: '仅针对Ruler任务样本限制 (默认32)')
+        text(name: 'TASK_MAX_LENGTH_JSON', defaultValue: '{"mmlu_pro":32768,"gsm_plus":32768,"humaneval":16384,"ruler":137216}', description: '每任务最大上下文长度 (model_args max_length) 的 JSON 字典')
+        text(name: 'TASK_MAX_TOKENS_JSON', defaultValue: '{"mmlu_pro":2048,"gsm_plus":2048,"humaneval":4096,"ruler":4096}', description: '每任务 max_gen_toks 的 JSON 字典')
+        choice(name: 'TASK_TEMPERATURE_JSON', choices: [
+            '{"mmlu_pro":1.0,"gsm_plus":1.0,"humaneval":1.0,"ruler":1.0}',
+            '{"mmlu_pro":0.0,"gsm_plus":0.0,"humaneval":0.0,"ruler":0.0}'
+        ], description: '每任务 temperature 的 JSON 字典: 第一项=全部 1.0(默认); 第二项=全部 0.0')
+        text(name: 'TASK_EXAMPLES_JSON', defaultValue: '{"ruler":32}', description: '每任务样本数 limit 的 JSON 字典; 默认只有 ruler=32, 其他任务为空(跑全量)')
+        string(name: 'NUM_CONCURRENT', defaultValue: '1', description: '并发请求数 (model_args num_concurrent)')
         choice(name: 'LMEVAL_LOG_LEVEL', choices: ['INFO', 'DEBUG', 'WARNING', 'ERROR', 'CRITICAL'], description: 'lm-evaluation-harness 日志级别')
         string(name: 'DESCRIPTION', defaultValue: '', description: '模型服务的描述信息')
         text(name: 'RECIPIENTS', defaultValue: 'liwt@zetyun.com', description: '测试报告邮件接收者（逗号分隔）')
@@ -48,8 +54,11 @@ pipeline {
                     println("任务 GSM_PLUS:   ${params.TASK_GSM_PLUS}")
                     println("任务 HUMANEVAL:  ${params.TASK_HUMANEVAL}")
                     println("任务 RULER:      ${params.TASK_RULER}")
-                    println("样本限制:        ${params.LIMIT}")
-                    println("Ruler 样本限制:  ${params.RULER_LIMIT}")
+                    println("NUM_CONCURRENT:  ${params.NUM_CONCURRENT}")
+                    println("max_length JSON: ${params.TASK_MAX_LENGTH_JSON}")
+                    println("max_tokens JSON: ${params.TASK_MAX_TOKENS_JSON}")
+                    println("temperature JSON:${params.TASK_TEMPERATURE_JSON}")
+                    println("examples JSON:   ${params.TASK_EXAMPLES_JSON}")
                     println("日志级别:        ${params.LMEVAL_LOG_LEVEL}")
                     println("模型描述:        ${params.DESCRIPTION}")
                     println("邮件接收者:      ${params.RECIPIENTS}")
@@ -139,10 +148,6 @@ else
     echo "未发现残留进程"
 fi
 
-echo "=== 设置权限 ==="
-chmod +x lm_eval_test.sh
-chmod +x run_eval.py
-
 echo "=== 检查并创建虚拟环境 ==="
 if [ ! -d "${params.WORK_DIR}/.venv" ]; then
     export https_proxy=http://10.201.136.68:1080
@@ -211,8 +216,11 @@ python3 run_eval.py \
     --api-key "${env.API_KEY_STR ?: 'abc123'}" \
     --chat-api "${params.CHAT_API}" \
     --tasks ${env.TASKS} \
-    --limit "${params.LIMIT}" \
-    --ruler-limit "${params.RULER_LIMIT}" \
+    --task-max-length-json '${params.TASK_MAX_LENGTH_JSON}' \
+    --task-max-tokens-json '${params.TASK_MAX_TOKENS_JSON}' \
+    --task-temperature-json '${params.TASK_TEMPERATURE_JSON}' \
+    --task-examples-json '${params.TASK_EXAMPLES_JSON}' \
+    --num-concurrent "${params.NUM_CONCURRENT}" \
     --log-level "${params.LMEVAL_LOG_LEVEL}"
 echo "=== 测试脚本执行结束 ==="
 echo "=== 输出目录 ==="
@@ -404,8 +412,11 @@ scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
                 <tr><th>PD分离模式</th><td>${params.PD}</td></tr>
                 <tr><th>接口类型</th><td>${params.CHAT_API}</td></tr>
                 <tr><th>测试任务</th><td>${env.TASKS ?: (failureReason ? '未执行(连通性检查未通过)' : 'N/A')}</td></tr>
-                <tr><th>样本限制</th><td>${params.LIMIT ?: '无限制'}</td></tr>
-                <tr><th>Ruler样本限制</th><td>${params.RULER_LIMIT}</td></tr>
+                <tr><th>NUM_CONCURRENT</th><td>${params.NUM_CONCURRENT}</td></tr>
+                <tr><th>max_length JSON</th><td>${params.TASK_MAX_LENGTH_JSON}</td></tr>
+                <tr><th>max_tokens JSON</th><td>${params.TASK_MAX_TOKENS_JSON}</td></tr>
+                <tr><th>temperature JSON</th><td>${params.TASK_TEMPERATURE_JSON}</td></tr>
+                <tr><th>examples JSON</th><td>${params.TASK_EXAMPLES_JSON}</td></tr>
                 <tr><th>执行时间</th><td>${currentBuild.durationString}</td></tr>
                 <tr><th>测试状态</th><td>${resultStatus}</td></tr>
                 <tr><th>构建状态</th><td>${currentBuild.currentResult}</td></tr>

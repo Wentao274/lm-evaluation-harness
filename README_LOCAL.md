@@ -4,12 +4,14 @@
 
 支持的评测任务：
 
-| 任务        | 说明                  | 运行函数             | max_gen_toks | temperature | unsafe_code | num_fewshot |
-| ----------- | --------------------- | -------------------- | ------------ | ----------- | ----------- | ----------- |
-| `mmlu_pro`  | 综合知识问答          | `run_task_other`     | 2048         | 0.0         | false       | 5           |
-| `gsm_plus`  | 数学推理              | `run_task_other`     | 2048         | 0.0         | false       | 8           |
-| `humaneval` | 代码生成（含不安全码）| `run_task_humaneval` | 4096         | 0.0         | true        | 0           |
-| `ruler`     | 长上下文检索          | `run_task_ruler`     | 4096         | 0.0         | false       | 0           |
+| 任务        | 说明                  | max_length | max_gen_toks | temperature(默认) | unsafe_code | num_fewshot | batch_size |
+| ----------- | --------------------- | ---------- | ------------ | ----------------- | ----------- | ----------- | ---------- |
+| `mmlu_pro`  | 综合知识问答          | 32768      | 2048         | 1.0               | false       | 5           | 8          |
+| `gsm_plus`  | 数学推理              | 32768      | 2048         | 1.0               | false       | 8           | 8          |
+| `humaneval` | 代码生成（含不安全码）| 16384      | 4096         | 1.0               | true        | 0           | 8          |
+| `ruler`     | 长上下文检索          | 137216     | 4096         | 1.0               | false       | 0           | 1          |
+
+> 以上 `max_length`、`max_gen_toks`、`temperature` 均可通过 JSON 参数按任务覆盖（见下文）。`unsafe_code`、`num_fewshot`、`batch_size` 为任务固有配置，不可通过参数覆盖。
 
 ---
 
@@ -64,12 +66,9 @@ uv pip install "lm_eval[sglang]"       # sglang 后端（可选）
 lm-eval -h
 ```
 
-### 5. 赋予脚本执行权限
+### 5. 脚本执行权限
 
-```shell
-chmod +x lm_eval_test.sh
-chmod +x run_eval.py
-```
+`lm_eval_test.sh` 和 `run_eval.py` 已在 Git 中标记为可执行（`100755`），克隆后可直接执行，无需手动 `chmod`。
 
 ---
 
@@ -105,19 +104,24 @@ chmod +x run_eval.py
 
 **关键环境变量**（优先级高于命令行默认值）
 
-| 环境变量           | 默认值                                                 | 说明                                                                        |
-| ------------------ | ------------------------------------------------------ | --------------------------------------------------------------------------- |
-| `LLM_ADDR`         | `http://$ADDR:$PORT`                                   | 完整 LLM 地址，设置后覆盖 addr/port                                         |
-| `ADDR` / `PORT`    | `127.0.0.1` / `8080`                                   | 服务地址与端口（仅当 `LLM_ADDR` 未设置时生效）                              |
-| `API_KEY`          | `abc123`                                               | Bearer 认证 Key                                                             |
-| `MODEL_NAME`       | `kimi-k2.5`                                            | 模型服务名称                                                                |
-| `LOCAL_MODEL_PATH` | `/dingofs/data2/userdata/llms/moonshotai/Kimi-K2.6`    | 本地模型路径（tokenizer 来源）                                              |
-| `OUTPUT_BASE`      | `./output_h100`                                        | 结果输出根目录                                                              |
-| `CHAT_API`         | `OpenAI Completions`                                   | 接口类型：`OpenAI Completions`→`/v1/completions`；`OpenAI ChatCompletions`→`/v1/chat/completions` 并启用 `--apply_chat_template` |
-| `LIMIT`            | 空                                                     | 限制每个任务样本数（ruler 任务除外），为空则不限制                          |
-| `RULER_LIMIT`      | `32`                                                   | 仅针对 ruler 任务的样本限制                                                 |
-| `HF_ENDPOINT`      | `https://hf-mirror.com`                               | HuggingFace 镜像地址                                                        |
-| `LMEVAL_LOG_LEVEL` | `INFO`                                                 | lm-eval 日志级别                                                            |
+| 环境变量                 | 默认值                                                                              | 说明                                                                        |
+| ------------------------ | ----------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `LLM_ADDR`               | `http://$ADDR:$PORT`                                                                | 完整 LLM 地址，设置后覆盖 addr/port                                         |
+| `ADDR` / `PORT`          | `127.0.0.1` / `8080`                                                                | 服务地址与端口（仅当 `LLM_ADDR` 未设置时生效）                              |
+| `API_KEY`                | `abc123`                                                                            | Bearer 认证 Key                                                             |
+| `MODEL_NAME`             | `kimi-k2.5`                                                                         | 模型服务名称                                                                |
+| `LOCAL_MODEL_PATH`        | `/dingofs/data2/userdata/llms/moonshotai/Kimi-K2.6`                                 | 本地模型路径（tokenizer 来源）                                              |
+| `OUTPUT_BASE`            | `./output_h100`                                                                     | 结果输出根目录                                                              |
+| `CHAT_API`               | `OpenAI ChatCompletions`                                                             | 接口类型：`OpenAI Completions`→`/v1/completions`；`OpenAI ChatCompletions`→`/v1/chat/completions` 并启用 `--apply_chat_template` |
+| `TASK_MAX_LENGTH_JSON`   | `{"mmlu_pro":32768,"gsm_plus":32768,"humaneval":16384,"ruler":137216}`              | 每任务最大上下文长度（model_args `max_length`），JSON 字典                   |
+| `TASK_MAX_TOKENS_JSON`   | `{"mmlu_pro":2048,"gsm_plus":2048,"humaneval":4096,"ruler":4096}`                   | 每任务 `max_gen_toks`（gen_kwargs），JSON 字典                              |
+| `TASK_TEMPERATURE_JSON`  | `{"mmlu_pro":1.0,"gsm_plus":1.0,"humaneval":1.0,"ruler":1.0}`                       | 每任务 `temperature`（gen_kwargs），JSON 字典，默认全为 1.0                 |
+| `TASK_EXAMPLES_JSON`     | `{"ruler":32}`                                                                      | 每任务样本数 limit，JSON 字典；默认只有 ruler=32，其他任务为空（跑全量）    |
+| `NUM_CONCURRENT`         | `1`                                                                                 | 并发请求数（model_args `num_concurrent`）                                    |
+| `HF_ENDPOINT`           | `https://hf-mirror.com`                                                             | HuggingFace 镜像地址                                                        |
+| `LMEVAL_LOG_LEVEL`       | `INFO`                                                                              | lm-eval 日志级别                                                            |
+
+> **JSON 字典格式说明**：键为任务名，值为对应参数。若某任务在 JSON 中缺失或值为空，`max_length` 兜底为 `32768`、`max_tokens` 兜底为 `4096`、`temperature` 兜底为 `1.0`、`limit` 为空（不限制）。
 
 #### 执行示例
 
@@ -137,6 +141,10 @@ export OUTPUT_BASE="./output_h100"
 
 # 通过命令行参数指定地址与模型
 ./lm_eval_test.sh -a 10.201.149.10 -p 8080 -m kimi-k2.5 -d /path/to/model mmlu_pro
+
+# 覆盖每任务的 temperature（全部 0.0）
+export TASK_TEMPERATURE_JSON='{"mmlu_pro":0.0,"gsm_plus":0.0,"humaneval":0.0,"ruler":0.0}'
+./lm_eval_test.sh mmlu_pro,gsm_plus,humaneval,ruler
 
 # 后台运行并将日志输出到文件
 nohup ./lm_eval_test.sh mmlu_pro,gsm_plus > ./lm_eval_run.log 2>&1 &
@@ -159,27 +167,33 @@ python3 run_eval.py \
     [--api-key <API_KEY>] \
     [--chat-api <接口类型>] \
     [--tasks <任务列表>] \
-    [--limit <样本限制>] \
-    [--ruler-limit <ruler样本限制>] \
+    [--task-max-length-json <JSON>] \
+    [--task-max-tokens-json <JSON>] \
+    [--task-temperature-json <JSON>] \
+    [--task-examples-json <JSON>] \
+    [--num-concurrent <并发数>] \
     [--log-level <日志级别>]
 ```
 
 #### 参数说明
 
-| 参数             | 类型 | 默认值               | 说明                                                          |
-| ---------------- | ---- | -------------------- | ------------------------------------------------------------- |
-| `--tester`       | 必填 | -                    | 测试人员名称                                                  |
-| `--build-number` | 必填 | -                    | 构建编号                                                      |
-| `--chip`         | 必填 | -                    | 芯片平台名称                                                  |
-| `--model`        | 必填 | -                    | 模型服务名称（含路径前缀时取最后一段作为目录名）              |
-| `--model-path`   | 必填 | -                    | 本地模型文件路径                                              |
-| `--base-url`     | 必填 | -                    | LLM 基础地址，如 `http://127.0.0.1:8080`                      |
-| `--api-key`      | 可选 | 空                   | Bearer 认证 Key                                               |
-| `--chat-api`     | 可选 | `OpenAI Completions` | 接口类型：`OpenAI Completions` / `OpenAI ChatCompletions`     |
-| `--tasks`        | 可选 | `mmlu_pro`           | 任务列表，逗号分隔                                            |
-| `--limit`        | 可选 | 空                   | 样本数限制（ruler 除外）                                      |
-| `--ruler-limit`  | 可选 | `32`                 | ruler 任务样本限制                                            |
-| `--log-level`    | 可选 | `INFO`               | 日志级别：DEBUG/INFO/WARNING/ERROR/CRITICAL                   |
+| 参数                       | 类型 | 默认值                                                                      | 说明                                                          |
+| -------------------------- | ---- | --------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `--tester`                 | 必填 | -                                                                           | 测试人员名称                                                  |
+| `--build-number`           | 必填 | -                                                                           | 构建编号                                                      |
+| `--chip`                   | 必填 | -                                                                           | 芯片平台名称                                                  |
+| `--model`                  | 必填 | -                                                                           | 模型服务名称（含路径前缀时取最后一段作为目录名）              |
+| `--model-path`             | 必填 | -                                                                           | 本地模型文件路径                                              |
+| `--base-url`               | 必填 | -                                                                           | LLM 基础地址，如 `http://127.0.0.1:8080`                      |
+| `--api-key`                | 可选 | 空                                                                          | Bearer 认证 Key                                               |
+| `--chat-api`               | 可选 | `OpenAI ChatCompletions`                                                    | 接口类型：`OpenAI ChatCompletions` / `OpenAI Completions`     |
+| `--tasks`                  | 可选 | `mmlu_pro`                                                                  | 任务列表，逗号分隔                                            |
+| `--task-max-length-json`   | 可选 | `{"mmlu_pro":32768,"gsm_plus":32768,"humaneval":16384,"ruler":137216}`      | 每任务 max_length 的 JSON 字典                               |
+| `--task-max-tokens-json`   | 可选 | `{"mmlu_pro":2048,"gsm_plus":2048,"humaneval":4096,"ruler":4096}`           | 每任务 max_gen_toks 的 JSON 字典                              |
+| `--task-temperature-json`  | 可选 | `{"mmlu_pro":1.0,"gsm_plus":1.0,"humaneval":1.0,"ruler":1.0}`               | 每任务 temperature 的 JSON 字典（默认全为 1.0）              |
+| `--task-examples-json`     | 可选 | `{"ruler":32}`                                                              | 每任务样本数 limit 的 JSON 字典（缺失/空值=跑全量）          |
+| `--num-concurrent`         | 可选 | `1`                                                                         | 并发请求数（model_args `num_concurrent`）                     |
+| `--log-level`              | 可选 | `INFO`                                                                      | 日志级别：DEBUG/INFO/WARNING/ERROR/CRITICAL                   |
 
 #### 执行示例
 
@@ -194,19 +208,24 @@ python3 run_eval.py \
     --model-path /dingofs/data2/userdata/llms/moonshotai/Kimi-K2.6 \
     --base-url http://127.0.0.1:8080 \
     --api-key abc123 \
-    --chat-api "OpenAI Completions" \
+    --chat-api "OpenAI ChatCompletions" \
     --tasks mmlu_pro,gsm_plus,humaneval,ruler \
-    --ruler-limit 32 \
+    --task-temperature-json '{"mmlu_pro":0.0,"gsm_plus":0.0,"humaneval":0.0,"ruler":0.0}' \
+    --num-concurrent 1 \
     --log-level INFO
 ```
 
 ### 脚本内部执行流程
 
-1. **解析参数并构造 model_args**：根据 `CHAT_API` 选择 `local-completions`（`/v1/completions`）或 `local-chat-completions`（`/v1/chat/completions`）接口（所有任务共用），并为不同任务生成对应的 `model_args`：other（mmlu_pro/gsm_plus）`max_length=32768`，humaneval `max_length=16384`，ruler `max_length=137216`，均 `num_concurrent=10`、`max_retries=3`、`timeout=1200`。`gen_kwargs` 中 other 与 ruler 包含 `top_p=0.95`、`top_k=40`，humaneval 不包含。`batch_size`：other 与 humaneval 为 32，ruler 为 1。
-2. **生成日志文件**：`$OUTPUT_BASE/lm-eval-<tasks>.log`，所有输出同时写入终端与日志。
-3. **按任务顺序执行**：依次调用 `lm_eval` CLI，结果输出到 `$OUTPUT_BASE/<task_name>/`。
-4. **ruler 任务**固定使用 `--limit $RULER_LIMIT`，其他任务在 `LIMIT` 非空时启用 `--limit`。
-5. **humaneval 任务**会自动设置 `HF_ALLOW_CODE_EVAL=1` 并附加 `--confirm_run_unsafe_code`，执行后取消该环境变量。
+1. **解析参数与接口选择**：根据 `CHAT_API` 选择 `local-completions`（`/v1/completions`）或 `local-chat-completions`（`/v1/chat/completions`）接口，所有任务共用。
+2. **统一构造 model_args**：通过 `build_model_args()` 函数生成，其中 `max_length` 按任务从 `TASK_MAX_LENGTH_JSON` 读取，`num_concurrent` 取全局 `NUM_CONCURRENT` 值，其余字段（`max_retries=3`、`timeout=1200`、`enable_thinking=false` 等）所有任务一致。
+3. **统一运行任务**：所有任务通过 `run_task()` 函数执行，按任务从 JSON 字典读取 `max_length`、`max_tokens`、`temperature`、`limit`，结合任务固有配置（`unsafe_code`、`num_fewshot`、`batch_size`、`gen_kwargs_type`）调用 `lm_eval` CLI。
+4. **gen_kwargs 差异**：mmlu_pro / gsm_plus / ruler 包含 `top_p=0.95`、`top_k=40`（gen_kwargs_type=full）；humaneval 不包含（gen_kwargs_type=simple）。
+5. **batch_size 差异**：mmlu_pro / gsm_plus / humaneval 为 8，ruler 为 1。
+6. **生成日志文件**：`$OUTPUT_BASE/lm-eval-<tasks>.log`，所有输出同时写入终端与日志。
+7. **按任务顺序执行**：依次调用 `lm_eval` CLI，结果输出到 `$OUTPUT_BASE/<task_name>/`。
+8. **样本限制**：从 `TASK_EXAMPLES_JSON` 按任务读取 limit 值，为空则不限制（跑全量），非空则附加 `--limit`。
+9. **humaneval 任务**会自动设置 `HF_ALLOW_CODE_EVAL=1` 并附加 `--confirm_run_unsafe_code`，执行后取消该环境变量。
 
 ### 输出目录结构
 
@@ -260,27 +279,30 @@ lm-evaluation-harness 的 Jenkins 测试流水线：
 
 #### 构建参数
 
-| 参数              | 类型     | 默认值                                                | 说明                                                                  |
-| ----------------- | -------- | ----------------------------------------------------- | --------------------------------------------------------------------- |
-| `TESTER`          | string   | `liwt`                                                | 测试人员名称（必填）                                                  |
-| `CHIP`            | string   | `nvidia-h100`                                         | 芯片平台名称（必填）                                                  |
-| `ENGINE`          | choice   | `vllm` / `sglang`                                     | 推理框架（必填）                                                      |
-| `PD`              | choice   | `agg` / `disagg`                                      | PD 分离模式（`agg` 非分离，`disagg` PD 分离）                         |
-| `MODEL`           | string   | `kimi-k2.5`                                           | 模型服务名称（必填）                                                  |
-| `MODEL_PATH`      | string   | `/dingofs/data2/userdata/llms/moonshotai/Kimi-K2.6`   | 模型文件本地路径（host 绝对路径）                                     |
-| `BASE_URL`        | string   | `http://10.201.149.10:8080`                           | API 地址（必填）                                                      |
-| `API_KEY`         | password | 空                                                    | API Key（可选，无需认证时留空，留空时脚本默认使用 `abc123`）          |
-| `CHAT_API`        | choice   | `OpenAI ChatCompletions` / `OpenAI Completions`       | 接口类型                                                              |
-| `TASK_MMLU_PRO`   | bool     | `true`                                                | 运行 mmlu_pro 任务                                                    |
-| `TASK_GSM_PLUS`   | bool     | `true`                                                | 运行 gsm_plus 任务                                                    |
-| `TASK_HUMANEVAL`  | bool     | `true`                                                | 运行 humaneval 任务                                                   |
-| `TASK_RULER`      | bool     | `true`                                                | 运行 ruler 任务                                                       |
-| `LIMIT`           | string   | 空                                                    | 每个任务样本数限制（ruler 除外，为空则不限制）                        |
-| `RULER_LIMIT`     | string   | `32`                                                  | ruler 任务样本限制                                                    |
-| `LMEVAL_LOG_LEVEL`| choice   | `INFO` / `DEBUG` / `WARNING` / `ERROR` / `CRITICAL`   | lm-eval 日志级别                                                      |
-| `DESCRIPTION`     | string   | 空                                                    | 模型服务的描述信息                                                    |
-| `RECIPIENTS`      | text     | `liwt@zetyun.com`                                     | 测试报告邮件接收者（逗号分隔）                                        |
-| `WORK_DIR`        | string   | `/dingofs/data2/userdata/liwt/maas-image/lm-evaluation-harness` | 测试仓库目录（请勿改动）                                    |
+| 参数                    | 类型     | 默认值                                                | 说明                                                                  |
+| ----------------------- | -------- | ----------------------------------------------------- | --------------------------------------------------------------------- |
+| `TESTER`                | string   | `liwt`                                                | 测试人员名称（必填）                                                  |
+| `CHIP`                  | string   | `nvidia-h100`                                         | 芯片平台名称（必填）                                                  |
+| `ENGINE`                | choice   | `vllm` / `sglang`                                     | 推理框架（必填）                                                      |
+| `PD`                    | choice   | `agg` / `disagg`                                      | PD 分离模式（`agg` 非分离，`disagg` PD 分离）                         |
+| `MODEL`                 | string   | `kimi-k2.5`                                           | 模型服务名称（必填）                                                  |
+| `MODEL_PATH`            | string   | `/dingofs/data2/userdata/llms/moonshotai/Kimi-K2.6`   | 模型文件本地路径（host 绝对路径）                                     |
+| `BASE_URL`              | string   | `http://10.201.149.10:8080`                           | API 地址（必填）                                                      |
+| `API_KEY`               | password | 空                                                    | API Key（可选，无需认证时留空，留空时脚本默认使用 `abc123`）          |
+| `CHAT_API`              | choice   | `OpenAI ChatCompletions` / `OpenAI Completions`       | 接口类型                                                              |
+| `TASK_MMLU_PRO`         | bool     | `true`                                                | 运行 mmlu_pro 任务                                                    |
+| `TASK_GSM_PLUS`         | bool     | `true`                                                | 运行 gsm_plus 任务                                                    |
+| `TASK_HUMANEVAL`        | bool     | `true`                                                | 运行 humaneval 任务                                                   |
+| `TASK_RULER`            | bool     | `true`                                                | 运行 ruler 任务                                                       |
+| `TASK_MAX_LENGTH_JSON`  | text     | `{"mmlu_pro":32768,"gsm_plus":32768,"humaneval":16384,"ruler":137216}` | 每任务最大上下文长度（model_args `max_length`）的 JSON 字典 |
+| `TASK_MAX_TOKENS_JSON`  | text     | `{"mmlu_pro":2048,"gsm_plus":2048,"humaneval":4096,"ruler":4096}`     | 每任务 `max_gen_toks` 的 JSON 字典                            |
+| `TASK_TEMPERATURE_JSON` | choice   | 全部 1.0 / 全部 0.0                                   | 每任务 temperature 的 JSON 字典（第一项=全部 1.0 默认；第二项=全部 0.0）|
+| `TASK_EXAMPLES_JSON`    | text     | `{"ruler":32}`                                        | 每任务样本数 limit 的 JSON 字典；默认只有 ruler=32，其他为空（跑全量）|
+| `NUM_CONCURRENT`        | string   | `1`                                                   | 并发请求数（model_args `num_concurrent`）                             |
+| `LMEVAL_LOG_LEVEL`      | choice   | `INFO` / `DEBUG` / `WARNING` / `ERROR` / `CRITICAL`   | lm-eval 日志级别                                                      |
+| `DESCRIPTION`           | string   | 空                                                    | 模型服务的描述信息                                                    |
+| `RECIPIENTS`            | text     | `liwt@zetyun.com`                                     | 测试报告邮件接收者（逗号分隔）                                        |
+| `WORK_DIR`              | string   | `/dingofs/data2/userdata/liwt/maas-image/lm-evaluation-harness` | 测试仓库目录（请勿改动）                                    |
 
 #### 执行阶段
 
@@ -290,11 +312,10 @@ lm-evaluation-harness 的 Jenkins 测试流水线：
 2. **API 连通性预检**：SSH 到远程主机，对 `/v1/models` 与 `/v1/chat/completions` 接口发起请求。若失败，将构建标记为 `UNSTABLE` 并设置 `CONNECTIVITY_FAILED`，后续阶段（环境检查、运行测试）跳过。
 3. **环境检查**（连通性通过后执行）：
    - 清理可能残留的 `lm_eval` / `run_eval` 进程（先 SIGTERM，未响应再 SIGKILL）
-   - 赋予脚本执行权限（`lm_eval_test.sh`、`run_eval.py`）
    - 若 `.venv` 不存在，则通过代理执行 `uv venv` 并安装依赖（`uv pip install .`、`lm_eval[api]`、`lm_eval[unsafe_code]`、`lm_eval[ruler]`、`lm_eval[sglang]`、`lm_eval[hf]`）
 4. **运行 lm-evaluation 测试**（连通性通过后执行）：
    - 根据勾选的任务布尔参数拼接 `TASKS` 列表（如 `mmlu_pro,gsm_plus,humaneval,ruler`）
-   - 激活远程虚拟环境，执行 `python3 run_eval.py` 并传入全部参数
+   - 激活远程虚拟环境，执行 `python3 run_eval.py` 并传入全部参数（含各 JSON 字典参数与 `--num-concurrent`）
    - 远程输出目录：`output/<TESTER>/<BUILD_NUMBER>/<CHIP>/<MODEL_DIR>/`
 5. **拉取测试结果**：通过 `scp` 将远程结果目录拉取到 Jenkins 的 `reports/<TESTER>/<BUILD_NUMBER>/<CHIP>/`，同时拉取连通性预检日志到 `builds/<BUILD_NUMBER>/`。
 6. **发送邮件**：解析日志中各任务的得分表格与主指标，生成 HTML 邮件报告发送给 `RECIPIENTS`，并附带日志附件。连通性失败时邮件中会展示失败原因段落。
@@ -317,8 +338,9 @@ lm-evaluation-harness 的 Jenkins 测试流水线：
 
 ## 四、注意事项
 
-1. **接口类型选择**：`OpenAI Completions` 使用 `/v1/completions` 且不启用 chat template；`OpenAI ChatCompletions` 使用 `/v1/chat/completions` 并附加 `--apply_chat_template`。请根据被测模型服务支持的接口选择。
+1. **接口类型选择**：`OpenAI Completions` 使用 `/v1/completions` 且不启用 chat template；`OpenAI ChatCompletions` 使用 `/v1/chat/completions` 并附加 `--apply_chat_template`。请根据被测模型服务支持的接口选择。默认为 `OpenAI ChatCompletions`。
 2. **模型路径**：`LOCAL_MODEL_PATH` / `MODEL_PATH` 仅用于加载 tokenizer，不会加载模型权重，确保该路径下包含正确的 tokenizer 配置文件。
 3. **humaneval 安全码**：该任务需执行模型生成的代码，脚本会自动设置 `HF_ALLOW_CODE_EVAL=1`，请在可信环境中运行。
 4. **离线环境**：若网络受限，请提前完成离线数据集复制（见「环境准备」），并可设置 `HF_HUB_OFFLINE=1`、`TRANSFORMERS_OFFLINE=1`。
-5. **超时与重试**：model_args 中默认配置 `num_concurrent=10`、`max_retries=3`、`timeout=1200`（所有任务一致）。如遇大量超时，可适当增大 timeout 或降低并发数。
+5. **并发与超时**：`NUM_CONCURRENT` 默认为 1，控制 model_args 中的 `num_concurrent`。model_args 中 `max_retries=3`、`timeout=1200`（所有任务一致）。如遇大量超时，可适当增大 timeout 或调整并发数。
+6. **JSON 字典兜底**：若某任务在 `TASK_MAX_LENGTH_JSON` / `TASK_MAX_TOKENS_JSON` / `TASK_TEMPERATURE_JSON` 中缺失或值为空，分别兜底为 `32768` / `4096` / `1.0`。`TASK_EXAMPLES_JSON` 中缺失或为空则不限制样本数（跑全量）。

@@ -21,9 +21,9 @@ def parse_args():
     )
     parser.add_argument(
         "--chat-api",
-        default="OpenAI Completions",
-        choices=["OpenAI Completions", "OpenAI ChatCompletions"],
-        help="API endpoint type (default: OpenAI Completions)",
+        default="OpenAI ChatCompletions",
+        choices=["OpenAI ChatCompletions", "OpenAI Completions"],
+        help="API endpoint type (default: OpenAI ChatCompletions)",
     )
     parser.add_argument(
         "--tasks",
@@ -32,12 +32,29 @@ def parse_args():
         "Supported: mmlu_pro, gsm_plus, humaneval, ruler",
     )
     parser.add_argument(
-        "--limit", default="", help="Limit number of samples per task (optional)"
+        "--task-max-length-json",
+        default='{"mmlu_pro":32768,"gsm_plus":32768,"humaneval":16384,"ruler":137216}',
+        help="JSON dict of per-task max_length (model_args)",
     )
     parser.add_argument(
-        "--ruler-limit",
-        default="32",
-        help="Limit number of samples for ruler task (default: 32)",
+        "--task-max-tokens-json",
+        default='{"mmlu_pro":2048,"gsm_plus":2048,"humaneval":4096,"ruler":4096}',
+        help="JSON dict of per-task max_gen_toks (gen_kwargs)",
+    )
+    parser.add_argument(
+        "--task-temperature-json",
+        default='{"mmlu_pro":1.0,"gsm_plus":1.0,"humaneval":1.0,"ruler":1.0}',
+        help="JSON dict of per-task temperature (gen_kwargs, default: all 1.0)",
+    )
+    parser.add_argument(
+        "--task-examples-json",
+        default='{"ruler":32}',
+        help="JSON dict of per-task sample limit (empty value or missing key = full set; default: ruler=32)",
+    )
+    parser.add_argument(
+        "--num-concurrent",
+        default="1",
+        help="Concurrent requests in model_args (default: 1)",
     )
     parser.add_argument(
         "--log-level",
@@ -73,9 +90,11 @@ def main():
     env["LOCAL_MODEL_PATH"] = args.model_path
     env["OUTPUT_BASE"] = output_dir
     env["CHAT_API"] = args.chat_api
-    if args.limit:
-        env["LIMIT"] = args.limit
-    env["RULER_LIMIT"] = args.ruler_limit
+    env["TASK_MAX_LENGTH_JSON"] = args.task_max_length_json
+    env["TASK_MAX_TOKENS_JSON"] = args.task_max_tokens_json
+    env["TASK_TEMPERATURE_JSON"] = args.task_temperature_json
+    env["TASK_EXAMPLES_JSON"] = args.task_examples_json
+    env["NUM_CONCURRENT"] = args.num_concurrent
     env["LMEVAL_LOG_LEVEL"] = args.log_level
 
     cmd = ["bash", shell_script, args.tasks]
