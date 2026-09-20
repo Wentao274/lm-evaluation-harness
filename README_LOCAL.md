@@ -1,6 +1,6 @@
 # lm-evaluation-harness 本地与 Jenkins 测试指南
 
-本文档介绍如何使用 `lm_eval_test.sh` / `run_eval.py` 手动执行 lm-evaluation-harness 精度评测，以及通过 `Jenkinsfile` 自动触发测试的完整流程。
+本文档介绍如何使用 `lm_eval_test.sh` / `run_lmeval.py` 手动执行 lm-evaluation-harness 精度评测，以及通过 `Jenkinsfile` 自动触发测试的完整流程。
 
 支持的评测任务：
 
@@ -68,13 +68,13 @@ lm-eval -h
 
 ### 5. 脚本执行权限
 
-`lm_eval_test.sh` 和 `run_eval.py` 已在 Git 中标记为可执行（`100755`），克隆后可直接执行，无需手动 `chmod`。
+`lm_eval_test.sh` 和 `run_lmeval.py` 已在 Git 中标记为可执行（`100755`），克隆后可直接执行，无需手动 `chmod`。
 
 ---
 
 ## 二、手动执行测试
 
-手动执行有两种方式：直接调用 `lm_eval_test.sh`，或通过 Python 封装脚本 `run_eval.py`（后者会自动生成带时间戳的输出目录并设置环境变量）。
+手动执行有两种方式：直接调用 `lm_eval_test.sh`，或通过 Python 封装脚本 `run_lmeval.py`（后者会自动生成带时间戳的输出目录并设置环境变量）。
 
 ### 方式一：直接执行 `lm_eval_test.sh`
 
@@ -150,14 +150,14 @@ export TASK_TEMPERATURE_JSON='{"mmlu_pro":0.0,"gsm_plus":0.0,"humaneval":0.0,"ru
 nohup ./lm_eval_test.sh mmlu_pro,gsm_plus > ./lm_eval_run.log 2>&1 &
 ```
 
-### 方式二：通过 `run_eval.py` 执行
+### 方式二：通过 `run_lmeval.py` 执行
 
-`run_eval.py` 是对 `lm_eval_test.sh` 的 Python 封装，会自动创建带时间戳的结果目录并通过环境变量传递参数，适合需要规范化输出路径的场景。
+`run_lmeval.py` 是对 `lm_eval_test.sh` 的 Python 封装，会自动创建带时间戳的结果目录并通过环境变量传递参数，适合需要规范化输出路径的场景。
 
 #### 用法
 
 ```shell
-python3 run_eval.py \
+python3 run_lmeval.py \
     --tester <测试人员> \
     --build-number <构建编号> \
     --chip <芯片平台> \
@@ -200,7 +200,7 @@ python3 run_eval.py \
 ```shell
 source .venv/bin/activate
 
-python3 run_eval.py \
+python3 run_lmeval.py \
     --tester liwt \
     --build-number 1 \
     --chip nvidia-h100 \
@@ -240,7 +240,7 @@ python3 run_eval.py \
   └── ruler/
   ```
 
-- 通过 `run_eval.py` 执行：
+- 通过 `run_lmeval.py` 执行：
 
   ```
   ./output/<tester>/<build_number>/<chip>/<model_dir>/<timestamp>/
@@ -311,11 +311,11 @@ lm-evaluation-harness 的 Jenkins 测试流水线：
 1. **打印测试参数**：输出本次构建的所有参数信息。
 2. **API 连通性预检**：SSH 到远程主机，对 `/v1/models` 与 `/v1/chat/completions` 接口发起请求。若失败，将构建标记为 `UNSTABLE` 并设置 `CONNECTIVITY_FAILED`，后续阶段（环境检查、运行测试）跳过。
 3. **环境检查**（连通性通过后执行）：
-   - 清理可能残留的 `lm_eval` / `run_eval` 进程（先 SIGTERM，未响应再 SIGKILL）
+   - 清理可能残留的 `lm_eval_test.sh` / `run_lmeval.py` 进程（精确匹配脚本名，先 SIGTERM，未响应再 SIGKILL）
    - 若 `.venv` 不存在，则通过代理执行 `uv venv` 并安装依赖（`uv pip install .`、`lm_eval[api]`、`lm_eval[unsafe_code]`、`lm_eval[ruler]`、`lm_eval[sglang]`、`lm_eval[hf]`）
 4. **运行 lm-evaluation 测试**（连通性通过后执行）：
    - 根据勾选的任务布尔参数拼接 `TASKS` 列表（如 `mmlu_pro,gsm_plus,humaneval,ruler`）
-   - 激活远程虚拟环境，执行 `python3 run_eval.py` 并传入全部参数（含各 JSON 字典参数与 `--num-concurrent`）
+   - 激活远程虚拟环境，执行 `python3 run_lmeval.py` 并传入全部参数（含各 JSON 字典参数与 `--num-concurrent`）
    - 远程输出目录：`output/<TESTER>/<BUILD_NUMBER>/<CHIP>/<MODEL_DIR>/`
 5. **拉取测试结果**：通过 `scp` 将远程结果目录拉取到 Jenkins 的 `reports/<TESTER>/<BUILD_NUMBER>/<CHIP>/`，同时拉取连通性预检日志到 `builds/<BUILD_NUMBER>/`。
 6. **发送邮件**：解析日志中各任务的得分表格与主指标，生成 HTML 邮件报告发送给 `RECIPIENTS`，并附带日志附件。连通性失败时邮件中会展示失败原因段落。

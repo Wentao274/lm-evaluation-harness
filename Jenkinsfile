@@ -123,21 +123,25 @@ cd ${params.WORK_DIR}
 echo "工作目录: \$(pwd)"
 ls -la
 
-echo "=== 清理残留进程 (lm_eval / run_eval) ==="
-RESIDUAL=\$(pgrep -af "lm_eval|run_eval" 2>/dev/null || true)
+echo "=== 清理残留进程 (lm_eval_test.sh / run_lmeval.py) ==="
+# 使用精确全字符串匹配,避免误杀其他测试框架的进程(如 run_evalscope.py 含 "run_eval" 子串)
+#   - "lm_eval_test\.sh" :本框架的 shell 脚本
+#   - "run_lmeval\.py"   :本框架的 Python 编排脚本
+#   - 排除含 "jenkins" / "durable" / "@tmp" 的 Jenkins 内部进程
+RESIDUAL=\$(pgrep -af "lm_eval_test\\.sh|run_lmeval\\.py" 2>/dev/null | grep -vE "jenkins|durable|@tmp" || true)
 if [ -n "\${RESIDUAL}" ]; then
     echo "发现残留进程:"
     echo "\${RESIDUAL}"
     echo "发送 SIGTERM..."
     echo "\${RESIDUAL}" | awk '{print \$1}' | xargs -r kill -TERM 2>/dev/null || true
     sleep 3
-    REMAINING=\$(pgrep -af "lm_eval|run_eval" 2>/dev/null || true)
+    REMAINING=\$(pgrep -af "lm_eval_test\\.sh|run_lmeval\\.py" 2>/dev/null | grep -vE "jenkins|durable|@tmp" || true)
     if [ -n "\${REMAINING}" ]; then
         echo "残留进程未响应 SIGTERM,发送 SIGKILL..."
         echo "\${REMAINING}" | awk '{print \$1}' | xargs -r kill -KILL 2>/dev/null || true
         sleep 1
     fi
-    FINAL=\$(pgrep -af "lm_eval|run_eval" 2>/dev/null || true)
+    FINAL=\$(pgrep -af "lm_eval_test\\.sh|run_lmeval\\.py" 2>/dev/null | grep -vE "jenkins|durable|@tmp" || true)
     if [ -n "\${FINAL}" ]; then
         echo "WARN: 以下残留进程仍存在,需人工介入:"
         echo "\${FINAL}"
@@ -206,7 +210,7 @@ export LC_ALL=en_US.UTF-8
 cd ${params.WORK_DIR}
 source .venv/bin/activate
 echo "=== 执行Python测试脚本 ==="
-python3 run_eval.py \
+python3 run_lmeval.py \
     --tester ${params.TESTER} \
     --build-number ${BUILD_NUMBER} \
     --chip ${params.CHIP} \
