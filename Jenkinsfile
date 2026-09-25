@@ -124,10 +124,10 @@ echo "工作目录: \$(pwd)"
 ls -la
 
 echo "=== 清理残留进程 (lm_eval_test.sh / run_lmeval.py) ==="
-# 使用精确全字符串匹配,避免误杀其他测试框架的进程(如 run_evalscope.py 含 "run_eval" 子串)
-#   - "lm_eval_test\.sh" :本框架的 shell 脚本
-#   - "run_lmeval\.py"   :本框架的 Python 编排脚本
-#   - 排除含 "jenkins" / "durable" / "@tmp" 的 Jenkins 内部进程
+# 使用精确全字符串匹配,避免误杀其他测试框架的进程(如 run_evalscope.py 含 run_eval 子串)
+#   - lm_eval_test.sh  :本框架的 shell 脚本
+#   - run_lmeval.py    :本框架的 Python 编排脚本
+#   - 排除含 jenkins / durable / @tmp 的 Jenkins 内部进程
 RESIDUAL=\$(pgrep -af "lm_eval_test\\.sh|run_lmeval\\.py" 2>/dev/null | grep -vE "jenkins|durable|@tmp" || true)
 if [ -n "\${RESIDUAL}" ]; then
     echo "发现残留进程:"
